@@ -1,0 +1,209 @@
+Groups reads together that appear to have come from the same original molecule. Reads
+are grouped by template, and then templates are sorted by the 5' mapping positions of
+the reads from the template, used from earliest mapping position to latest. Reads that
+have the same end positions are then sub-grouped by UMI sequence.
+
+Requires input to be template-coordinate sorted (header must advertise
+SO:unsorted, GO:query, and SS:template-coordinate). Sort upstream sources
+(`fgumi extract`, `samtools sort -n`, `fgumi merge --order queryname`, etc.)
+with `fgumi sort -i input.bam -o sorted.bam --order template-coordinate`
+before piping into this tool. Output is always written in template-coordinate
+order, sorted by:
+
+   1. The lower genome coordinate of the two outer ends of the templates (strand-aware)
+   2. The sequencing library
+   3. The cell barcode (CB tag, if present)
+   4. The assigned UMI tag
+   5. Read Name
+
+During grouping, reads and templates are filtered out as follows:
+
+1. Templates are filtered if all reads for the template are unmapped
+2. Templates are filtered if any non-secondary, non-supplementary read has mapping quality < min-map-q
+3. Templates are filtered if any UMI sequence contains one or more N bases
+4. Templates are filtered if --min-umi-length is specified and the UMI does not meet the length requirement
+5. Records are filtered out if flagged as either secondary or supplementary
+
+Grouping of UMIs is performed by one of four strategies:
+
+1. **identity**:  only reads with identical UMI sequences are grouped together. This strategy
+                  may be useful for evaluating data, but should generally be avoided as it will
+                  generate multiple UMI groups per original molecule in the presence of errors.
+2. **edit**:      reads are clustered into groups such that each read within a group has at least
+                  one other read in the group with <= edits differences and there are inter-group
+                  pairings with <= edits differences. Effective when there are small numbers of
+                  reads per UMI, but breaks down at very high coverage of UMIs.
+3. **adjacency**: a version of the directed adjacency method described in umi_tools
+                  (http://dx.doi.org/10.1101/051755) that allows for errors between UMIs but
+                  only when there is a count gradient.
+4. **paired**:    similar to adjacency but for methods that produce templates such that a read with
+                  A-B is related to but not identical to a read with B-A. Expects the UMI sequences
+                  to be stored in a single SAM tag separated by a hyphen (e.g. ACGT-CCGG) and allows
+                  for one of the two UMIs to be absent (e.g. ACGT- or -ACGT). The molecular IDs
+                  produced have more structure than for single UMI strategies and are of the form
+                  {base}/{A|B}. E.g. two UMI pairs would be mapped as follows:
+                  AAAA-GGGG -> 1/A, GGGG-AAAA -> 1/B.
+
+Strategies edit, adjacency, and paired make use of the --edits parameter to control the matching of
+non-identical UMIs.
+
+By default, all UMIs must be the same length. If --min-umi-length=len is specified then reads that
+have a UMI shorter than len will be discarded, and when comparing UMIs of different lengths, the first
+len bases will be compared, where len is the length of the shortest UMI. The UMI length is the number
+of [ACGT] bases in the UMI (i.e. does not count dashes and other non-ACGT characters). This option is
+not implemented for reads with UMI pairs (i.e. using the paired assigner).
+
+Note: the --min-map-q parameter defaults to 1 and is directly settable on the command line.
+(Duplicate marking is not performed by this command in fgumi; it is handled by `fgumi dedup`.)
+
+# Cell Barcodes
+
+If the input data contains cell barcodes (e.g. from single-cell sequencing), reads at the same
+genomic position are partitioned by cell barcode before UMI grouping. This ensures that reads from
+different cells are never grouped together, even if they share a UMI sequence and mapping position.
+The cell barcode is read from the standard `CB` tag. No correction or
+error-handling is performed on cell barcodes; they must be corrected upstream.
+
+Multi-threaded operation is supported via --threads N, which spawns N pipeline threads.
+Note this differs from fgbio, where --threads sizes only the pool of UMI-comparison worker
+threads; in fgumi --threads sizes the whole read/assign/write pipeline.
+
+Example: --threads 8 spawns 8 pipeline threads (2 reader, 4 workers, 2 writer)
+
+Note: when --parallel-group-min-templates (or --allow-unmapped) engages the parallel UMI
+assigner, each parallel assigner constructs its own rayon thread pool of size --threads,
+independent of the pipeline threads above. As an example, one pipeline worker overlapping a
+single parallel assigner briefly runs ~2 * --threads OS threads; this is not an upper bound,
+because multiple pipeline workers can each spawn a --threads-sized pool concurrently and push
+the live thread count higher still. See --parallel-group-min-templates for details.
+
+
+Usage: fgumi group [OPTIONS] --input <INPUT> --output <OUTPUT> --strategy <STRATEGY>
+
+Options:
+  -i, --input <INPUT>
+          Input BAM file
+
+  -v, --verbose
+          Enable verbose (debug-level) logging. Equivalent to setting `RUST_LOG=debug`
+
+  -o, --output <OUTPUT>
+          Output BAM file
+
+      --check-crc
+          Verify each BGZF block's CRC32 checksum while decoding the input.
+          
+          Without either `--check-crc` or `--no-check-crc`, fgumi verifies for file input and skips verification for stdin input: a freshly-piped aligner stream (e.g. `bwa-mem3 ... | fgumi ... -i /dev/stdin`) is trusted, since any corruption there is a bug in the upstream process rather than data at rest, while a file may have been archived, transferred, or copied since it was written, where a flipped bit is exactly what CRC32 exists to catch. Pass `--check-crc` to force verification on (e.g. for stdin input you don't trust). Mutually exclusive with `--no-check-crc`. Honored on every command's input decode, in both single- and multi-threaded modes: single-threaded decodes route through fgumi-bgzf, and `--threads N` runs (e.g. `clip --threads N`) decode through the unified pipeline, which takes its CRC policy from the same flag. Every run logs a `CRC verify:` line at startup stating what actually happened.
+
+      --no-check-crc
+          Skip CRC32 verification while decoding the input.
+          
+          Trades the CRC32 integrity check for faster decode. See `--check-crc` for the default policy this overrides and which commands/modes this has no effect on. Mutually exclusive with `--check-crc`.
+
+  -f, --family-size-histogram <FAMILY_SIZE_HISTOGRAM>
+          Optional output of tag family size counts
+
+  -g, --grouping-metrics <GROUPING_METRICS>
+          Optional output of UMI grouping metrics
+
+  -M, --metrics <METRICS>
+          Output prefix for all group metrics files.
+          
+          Writes `PREFIX.family_sizes.txt`, `PREFIX.grouping_metrics.txt`, and `PREFIX.position_group_sizes.txt`. Can be used alongside `--family-size-histogram` and `--grouping-metrics`.
+
+  -m, --min-map-q <MIN_MAP_Q>
+          Minimum mapping quality for mapped reads
+
+  -n, --include-non-pf-reads [<true|false>]
+          Include non-PF reads
+          
+          [default: false]
+
+      --allow-unmapped [<true|false>]
+          Allow fully unmapped templates (both reads unmapped). Input must be template-coordinate sorted (`fgumi sort --order template-coordinate`).
+          
+          Groups unmapped reads by UMI only within each library/cell barcode. Useful for ribosome display or other protocols with unmapped reads. Template-coordinate sort clusters unmapped reads by library/cell-barcode, which is what the streaming grouper needs to see consecutive same-cell reads. Queryname-sorted or FASTQ-order input (e.g. `fgumi extract` output) is rejected — pipe through `fgumi sort` first.
+          
+          IMPORTANT: All unmapped reads are placed in a single position group, meaning reads with identical/similar UMIs will be grouped together even if they originate from different genomic locations. This may cause over-grouping if UMI diversity is low.
+          
+          For paired UMIs (e.g., "ACGT-TGCA"), edit distance is computed on the concatenated sequence with dashes removed (30 bases for 15bp-15bp UMIs). With --edits 1, only 1 mismatch is allowed across ALL bases.
+          
+          [default: false]
+
+      --parallel-group-min-templates <N|auto>
+          Enable the parallel UMI assigner for position groups with at least this many templates. Useful for amplicon and other workflows where individual mapped position groups are very large; the default for normal whole-genome data is to stay sequential. Has an effect only when `--threads` is greater than 1: with `--threads 1` the assigner always falls back to the sequential implementation.
+          
+          Accepts either `auto` or an integer. `auto` selects per-strategy empirical thresholds derived from `benches/umi_assigner_threshold.rs`:
+          
+          - Identity:  never go parallel (sequential always wins, including at 16k templates) - Edit:      1536 templates - Adjacency: 3072 templates - Paired:    128 templates (parallel is 95x faster at 4k, 390x at 16k)
+          
+          An integer applies that single threshold uniformly to *every* strategy, including Identity (which `auto` keeps sequential): with a fixed `N`, any group whose template count reaches `N` uses the parallel assigner regardless of strategy.
+          
+          When `--allow-unmapped` is also set, *every* position group uses the parallel assigner regardless of this flag. This is intentional: allow-unmapped workflows (e.g. ribosome display) are essentially all-unmapped reads forming one large position group, where parallel always wins, so the run-wide flag is a good proxy. For mixed inputs that also contain many small mapped groups, prefer `--parallel-group-min-templates` over `--allow-unmapped`'s blanket parallelization.
+          
+          WARNING: each parallel assigner constructs its own `rayon::ThreadPool` of size `--threads`, which is independent of the pipeline's worker threads. As an example, one pipeline worker overlapping a single parallel assigner briefly runs ~2 * `--threads` OS threads; this is not an upper bound, because multiple pipeline workers can each spawn a `--threads`-sized pool concurrently, pushing the live thread count higher still. For amplicon data (few large groups, pipeline threads mostly idle) the over-subscription is harmless; for mixed workloads with many concurrent groups it can contend. Tune `--threads` accordingly.
+
+  -s, --strategy <STRATEGY>
+          The UMI assignment strategy
+
+          Possible values:
+          - identity:  Only reads with identical UMI sequences are grouped together
+          - edit:      Cluster reads based on mismatches between UMIs
+          - adjacency: Directed adjacency method from `umi_tools` that allows errors with count gradient
+          - paired:    Similar to adjacency but for paired UMIs (A-B related to B-A)
+
+  -e, --edits <EDITS>
+          The allowable number of edits between UMIs
+          
+          [default: 1]
+
+  -l, --min-umi-length <MIN_UMI_LENGTH>
+          The minimum UMI length
+
+      --threads <THREADS>
+          Number of threads for the multi-threaded pipeline.
+          
+          If not specified, uses a single-threaded fast path optimized for simple streaming. When specified (even with --threads 1), uses the 7-step parallel pipeline with work-stealing scheduler.
+
+      --compression-level <COMPRESSION_LEVEL>
+          Compression level for output BAM (0-12).
+          
+          Level 0 writes uncompressed BGZF (valid BAM, no DEFLATE) — useful for piped/intermediate outputs where downstream tools will recompress. Level 1 is fastest DEFLATE with larger files. Level 12 produces smallest files but is slowest.
+          
+          [default: 1]
+
+      --index-threshold <INDEX_THRESHOLD>
+          When to match UMIs through the N-gram/BK-tree index instead of comparing every pair. Either `always`, `never`, or a minimum number of distinct UMIs at a position. The number is a minimum, not a switch, so `0` gates the index on for every group exactly as `always` does; only `always` additionally errors when the strategy can never index. The index is a pure optimization: it never changes which reads group together. Edit and Adjacency index only at --edits 1, and Edit floors a numeric threshold at its own measured crossover (200 distinct UMIs); Paired indexes at every --edits value. Ignored for any position group handed to a parallel assigner, which with --threads above 1 means every group under --allow-unmapped and any group meeting --parallel-group-min-templates: those assigners find neighbours by enumeration and never consult the index
+          
+          [default: 100]
+
+      --no-umi [<true|false>]
+          Skip UMI-based grouping; group by template coordinate and strand of origin. Forces identity strategy and ignores any existing UMI tags. An F1R2 and an F2R1 template at the same coordinates therefore remain separate molecules
+          
+          [default: false]
+
+      --max-memory <MAX_MEMORY>
+          Maximum total memory for the pipeline queues.
+          
+          Default is "768" (768 MiB) per thread. Pass "auto" to detect host memory (cgroup-aware) and subtract --memory-reserve, so the budget shrinks to fit the host and the command self-throttles instead of OOM-ing. Explicit values like "512M", "1G", "4GiB" are per-thread when --memory-per-thread is enabled (default); plain numbers are MiB. Mirrors `fgumi sort`'s --max-memory.
+          
+          This bounds the bytes held in the queues *between* pipeline stages, in total. It is not a hard RSS cap: per-thread working memory and a single oversized group sit outside it. Individual stages also back off at their own lower high-water marks (512 MiB, and 256 MiB for the processed queue); a smaller budget tightens those marks, a larger one raises the total but leaves them where they are.
+          
+          [default: 768]
+
+      --memory-reserve <MEMORY_RESERVE>
+          Memory to reserve for other processes when --max-memory=auto.
+          
+          "auto" (default) reserves min(10 GiB, 50% of host memory). Explicit values like "10G", "8GiB" set a fixed reservation. Ignored when --max-memory is an explicit value.
+          
+          [default: auto]
+
+      --memory-per-thread [<true|false>]
+          Scale the memory limit by thread count.
+          
+          When enabled (default), --max-memory is per thread, so total memory = `max_memory` × threads. Disable for a fixed total budget regardless of thread count (recommended on fixed-RAM hosts).
+          
+          [default: true]
+
+  -h, --help
+          Print help (see a summary with '-h')

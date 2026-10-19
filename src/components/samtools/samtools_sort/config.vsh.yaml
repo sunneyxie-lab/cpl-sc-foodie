@@ -1,0 +1,75 @@
+name: samtools_sort
+namespace: samtools
+description: |
+  Sort a SAM/BAM file by coordinate (default) or by read name, using
+  `samtools sort` with temporary files under the component's temp directory.
+keywords: [sort, bam, sam]
+links:
+  homepage: https://www.htslib.org/
+  documentation: https://www.htslib.org/doc/samtools-sort.html
+  repository: https://github.com/samtools/samtools
+references:
+  doi: [10.1093/bioinformatics/btp352, 10.1093/gigascience/giab008]
+license: MIT/Expat
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        required: true
+        must_exist: true
+        description: SAM/BAM file to sort.
+        example: input.bam
+
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: Sorted BAM file.
+        example: out.bam
+
+  - name: Arguments
+    arguments:
+      - name: --natural_sort
+        alternatives: -n
+        type: boolean_true
+        description: Sort by read name (natural order) instead of by coordinate.
+      - name: --ascii_sort
+        alternatives: -N
+        type: boolean_true
+        description: Sort by read name (ASCII order) instead of by coordinate.
+      - name: --compression
+        alternatives: -l
+        type: integer
+        min: 0
+        max: 9
+        description: Compression level, from 0 (uncompressed) to 9 (best).
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1
+    setup:
+      - type: docker
+        run: |
+          samtools --version 2>&1 | head -1 | sed 's/samtools /samtools: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, midmem]

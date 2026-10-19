@@ -1,0 +1,52 @@
+name: tag_cell_barcode
+description: |
+  Copy each record's cell barcode from its read name suffix `_CB:Z:<barcode>`
+  into a `CB:Z:<barcode>` tag, leaving the read name and everything else
+  unchanged. Fails if a read name has no such suffix.
+keywords: [cell barcode, single cell, bam]
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        required: true
+        must_exist: true
+        description: SAM/BAM whose read names end in `_CB:Z:<barcode>`.
+        example: input.bam
+
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: BAM with a `CB:Z:<barcode>` tag on every record, in input order.
+        example: tagged.bam
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1
+    setup:
+      - type: docker
+        run: |
+          samtools --version 2>&1 | head -1 | sed 's/samtools /samtools: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, lowmem]

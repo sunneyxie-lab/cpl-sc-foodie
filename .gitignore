@@ -1,0 +1,13 @@
+.agents/plans/**
+.claude/plans/**
+.claude/worktrees/**
+.claude/settings.local.json
+.claude/__pycache__
+CLAUDE.local.md
+/target/
+work/
+.nextflow*
+trace*.txt
+*_test.output/
+resources_test/
+logs/

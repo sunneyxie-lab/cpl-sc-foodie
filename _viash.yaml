@@ -1,0 +1,17 @@
+viash_version: 0.9.7
+source: src
+target: target
+name: cpl-sc-foodie
+version: 0.1.0
+
+repositories:
+  - name: biobox
+    type: vsh
+    repo: biobox
+    tag: v0.5.0
+
+config_mods: |
+  .resources += {path: '/src/workflows/utils/labels.config', dest: 'nextflow_labels.config'}
+  .runners[.type == 'nextflow'].config.script := 'includeConfig("nextflow_labels.config")'
+  .engines[.type == 'docker'].target_registry := 'ghcr.io'
+  .engines[.type == 'docker'].target_organization := 'sunneyxie-lab'

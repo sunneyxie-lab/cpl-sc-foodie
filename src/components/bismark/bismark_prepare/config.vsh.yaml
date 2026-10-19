@@ -1,0 +1,62 @@
+name: bismark_prepare
+namespace: bismark
+description: |
+  Build a Bismark genome directory: copy the genome FASTA file(s) into the
+  output directory and index their bisulfite-converted (C->T and G->A) versions
+  with Bowtie 2, using `bismark prepare`.
+keywords: [bisulfite, methylation, alignment, bowtie2]
+links:
+  homepage: https://github.com/FelixKrueger/Bismark
+  documentation: https://github.com/FelixKrueger/Bismark/tree/master/docs
+  repository: https://github.com/FelixKrueger/Bismark
+references:
+  doi: 10.1093/bioinformatics/btr167
+license: GPL-3.0
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        required: true
+        must_exist: true
+        multiple: true
+        description: Genome FASTA file(s), plain or gzipped.
+        example: genome.fa
+
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: |
+          Genome directory holding the FASTA file(s) and the `Bisulfite_Genome/`
+          index, ready for `bismark align --genome`.
+        example: genome
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/bismark:3.1.0--hfa8f182_0
+    setup:
+      - type: docker
+        run: |
+          bismark --version 2>&1 | head -1 | sed 's/.*v\([0-9.]*\).*/bismark: \1/' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [midcpu, highmem]
