@@ -1,0 +1,100 @@
+name: bismark_align
+namespace: bismark
+description: |
+  Align paired-end bisulfite reads to a Bismark genome directory with
+  `bismark align` (Bowtie 2), writing a BAM file and the paired-end alignment
+  report.
+keywords: [bisulfite, methylation, alignment, bowtie2]
+links:
+  homepage: https://github.com/FelixKrueger/Bismark
+  documentation: https://github.com/FelixKrueger/Bismark/tree/master/docs
+  repository: https://github.com/FelixKrueger/Bismark
+references:
+  doi: 10.1093/bioinformatics/btr167
+license: GPL-3.0
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --genome
+        type: file
+        required: true
+        must_exist: true
+        description: Genome directory prepared by `bismark prepare`.
+        example: genome
+      - name: --mates1
+        alternatives: -1
+        type: file
+        required: true
+        must_exist: true
+        description: Read 1 FASTQ file, optionally gzipped.
+        example: R1.fq.gz
+      - name: --mates2
+        alternatives: -2
+        type: file
+        required: true
+        must_exist: true
+        description: Read 2 FASTQ file, optionally gzipped.
+        example: R2.fq.gz
+
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: Unsorted BAM file of aligned read pairs.
+        example: bismark_pe.bam
+      - name: --report
+        type: file
+        direction: output
+        required: true
+        description: Paired-end alignment report.
+        example: bismark_PE_report.txt
+
+  - name: Arguments
+    arguments:
+      - name: --maxins
+        alternatives: -X
+        type: integer
+        min: 1
+        description: Maximum insert size for valid paired-end alignments.
+        example: 2000
+      - name: --minins
+        alternatives: -I
+        type: integer
+        min: 0
+        description: Minimum insert size for valid paired-end alignments.
+        example: 0
+      - name: --non_directional
+        type: boolean_true
+        description: Align to all four bisulfite strands (non-directional libraries).
+      - name: --pbat
+        type: boolean_true
+        description: Align to the complementary strands only (PBAT libraries).
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/bismark:3.1.0--hfa8f182_0
+    setup:
+      - type: docker
+        run: |
+          bismark --version 2>&1 | head -1 | sed 's/.*v\([0-9.]*\).*/bismark: \1/' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [highcpu, highmem]

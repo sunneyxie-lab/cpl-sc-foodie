@@ -1,0 +1,217 @@
+Sort a BAM file using high-performance external merge-sort.
+
+This tool provides efficient BAM sorting with support for multiple sort orders:
+
+SORT ORDERS:
+
+  coordinate              Standard genomic coordinate sort (tid → pos → strand).
+                          Use for IGV visualization, variant calling, `fgumi review`.
+
+  queryname                Lexicographic read name sort (fast, default sub-sort).
+  queryname::lex           Short alias for lexicographic ordering (same as above).
+  queryname::lexicographic Explicit lexicographic ordering (same as above).
+  queryname::lexicographical Alias for the above; fgumi emits `queryname:lexicographical` in @HD SS.
+  queryname::natural       Natural numeric ordering (samtools-compatible).
+                          Use for `fgumi zipper`, template-level operations.
+
+  template-coordinate      Template-level position sort for UMI grouping.
+                          Use for `fgumi group`, `fgumi dedup`, and `fgumi downsample` input.
+
+PERFORMANCE:
+
+  - 1.9x faster than samtools on template-coordinate sort
+  - Handles BAM files larger than available RAM via spill-to-disk
+  - Uses parallel sorting (--threads) for in-memory chunks
+  - Configurable temp file compression (--temp-compression)
+  - Default 768M per-thread memory limit (samtools-compatible); pass
+    `--max-memory auto` to detect system memory (opt-in)
+  - Spilled runs are consolidated once they reach `--max-temp-files`
+    (default "auto": sized to the process's open-file limit, `ulimit -n`);
+    consolidation rewrites already-sorted data, so raising that limit
+    avoids it on very large inputs
+
+EXAMPLES:
+
+  # Sort for fgumi group input
+  fgumi sort -i aligned.bam -o sorted.bam --order template-coordinate
+
+  # Sort by coordinate for IGV
+  fgumi sort -i input.bam -o sorted.bam --order coordinate
+
+  # Sort by queryname for zipper
+  fgumi sort -i input.bam -o sorted.bam --order queryname
+
+  # Multi-threaded sort (default 768M per thread)
+  fgumi sort -i input.bam -o sorted.bam --order template-coordinate --threads 8
+
+  # Override the per-thread memory limit
+  fgumi sort -i input.bam -o sorted.bam -m 2GiB --threads 8
+
+  # Opt in to auto-detected system memory (subtracts --memory-reserve)
+  fgumi sort -i input.bam -o sorted.bam -m auto --threads 8
+
+  # Reserve extra memory for bwa mem running in a pipeline
+  fgumi sort -i input.bam -o sorted.bam --memory-reserve 12GiB --threads 4
+
+  # Cede cores to the aligner during ingest, but keep the merge wide
+  bwa mem -t 32 ref.fa r1.fq r2.fq | fgumi sort -i - -o sorted.bam -@ 8 --sort-threads 4
+
+  # Allow more spilled runs before consolidating (fewer consolidation passes)
+  fgumi sort -i input.bam -o sorted.bam --order coordinate --max-temp-files 512
+
+  # Verify a BAM file is correctly sorted
+  fgumi sort -i sorted.bam --verify --order template-coordinate
+
+  # Spread spill chunks across multiple temp dirs (round-robin, free-space aware)
+  fgumi sort -i in.bam -o out.bam -T /mnt/ssd1 -T /mnt/ssd2
+
+  # Same via FGUMI_TMP_DIRS env var (PATH-style list)
+  FGUMI_TMP_DIRS=/mnt/ssd1:/mnt/ssd2 fgumi sort -i in.bam -o out.bam
+
+
+Usage: fgumi sort [OPTIONS] --input <INPUT>
+
+Options:
+  -i, --input <INPUT>
+          Input BAM file
+
+  -v, --verbose
+          Enable verbose (debug-level) logging. Equivalent to setting `RUST_LOG=debug`
+
+  -o, --output <OUTPUT>
+          Output BAM file (required unless --verify is used)
+
+      --verify [<true|false>]
+          Verify the input file is correctly sorted (no output written).
+          
+          Reads records sequentially and checks that each record's sort key is >= the previous record's key. Exits 0 if sorted correctly, non-zero if any records are out of order.
+          
+          [default: false]
+
+      --order <ORDER>
+          Sort order.
+          
+          Queryname sort supports sub-sort specifiers: `queryname`                  Lexicographic byte ordering (default, fast) `queryname::lexicographic`   Explicit lexicographic ordering (alias: `queryname::lex`) `queryname::lexicographical` Alias; written as `queryname:lexicographical` in `@HD` SS `queryname::natural`         Natural numeric ordering (samtools-compatible)
+          
+          [default: template-coordinate]
+
+      --key-types <KEY_TYPES>
+          Which optional lanes to keep in the template-coordinate sort key.
+          
+          Smaller keys use less memory and spill less. Only meaningful for `--order template-coordinate`; ignored for other orders.
+          
+          (omitted)            Auto-detect from the first record + verify (default). full                 Keep all lanes (CB + library/MI). Largest key. none                 Drop all optional lanes (smallest, bulk pre-group). cb,library,mi        Comma/space list; keep the named lanes.
+          
+          A record carrying a value in a dropped lane aborts the sort with a message naming the field and the token to re-include it.
+
+  -m, --max-memory <MAX_MEMORY>
+          Maximum memory for in-memory sorting.
+          
+          Default is "768M" per thread (matching samtools behavior). Pass "auto" to detect system memory and subtract --memory-reserve, leaving room for the OS and co-running processes (e.g. an aligner). Explicit values like "512M", "1G", "4GiB" are per-thread when --memory-per-thread is enabled (default).
+          
+          When the limit is reached, sorted chunks spill to temporary files.
+          
+          [default: 768M]
+
+      --memory-reserve <MEMORY_RESERVE>
+          Memory to reserve for other processes when --max-memory=auto.
+          
+          "auto" (default) reserves min(10 GiB, 50% of system memory). Explicit values like "10G", "8GiB" set a fixed reservation. Set higher when running alongside a memory-intensive aligner (e.g. `bwa mem` with a human genome index uses ~8 GiB).
+          
+          Ignored when --max-memory is set to an explicit value.
+          
+          [default: auto]
+
+      --memory-per-thread [<true|false>]
+          Scale memory limit by thread count (samtools behavior).
+          
+          When enabled (default), --max-memory specifies memory per thread. Total memory = `max_memory` × the larger of --threads and --sort-threads, since the sort phase is what fills the in-memory buffer. Disable for fixed total memory.
+          
+          [default: true]
+
+  -T, --tmp-dir <TMP_DIRS>
+          Temporary directory for intermediate files. Repeatable.
+          
+          Pass `-T <path>` one or more times to spread spill chunks across multiple directories in free-space-aware round-robin order. Useful when one filesystem is too small or slower than the aggregate of several.
+          
+          If no flags are given and the `FGUMI_TMP_DIRS` environment variable is set, its value is parsed as a `PATH`-style list (colon-separated on Unix, semicolon-separated on Windows) and used instead.
+          
+          If neither is provided, the system default temp directory is used. For best performance, use fast SSDs.
+
+  -@, --threads <THREADS>
+          Number of threads for parallel operations.
+          
+          Used for parallel sorting of in-memory chunks and parallel temp-chunk (BGZF or zstd) compression.
+          
+          This is also the floor for the `--max-memory --memory-per-thread` multiplier: the sort runs on one global memory budget, sized by the larger of this and `--sort-threads` (the phase that fills the buffer). `--merge-threads` changes scheduling only and never resizes it.
+          
+          [default: 1]
+
+      --sort-threads <SORT_THREADS>
+          Number of threads for the sort phase (accumulate, sort, spill).
+          
+          Defaults to `--threads`. Lower this to cede cores to an upstream producer while keeping the merge wide -- with `-@ 8 --sort-threads 4`, ingest contends with the producer over only 4 threads, while the merge still uses 8 because it cannot start until the input is exhausted, by which point the producer has finished writing.
+          
+          The output is byte-identical, but this is not purely a scheduling knob: with --memory-per-thread enabled (default) the budget scales by the larger of --threads and --sort-threads, so raising this above --threads raises total memory by the same factor.
+
+      --merge-threads <MERGE_THREADS>
+          Number of threads for the merge phase (k-way merge and output write).
+          
+          Defaults to `--threads`. This only changes scheduling; the output is byte-identical.
+
+      --compression-level <COMPRESSION_LEVEL>
+          Compression level for output BAM (0-12).
+          
+          Level 0 writes uncompressed BGZF (valid BAM, no DEFLATE) — useful for piped/intermediate outputs where downstream tools will recompress. Level 1 is fastest DEFLATE with larger files. Level 12 produces smallest files but is slowest.
+          
+          [default: 1]
+
+      --temp-compression <TEMP_COMPRESSION>
+          Compression level for temporary chunk files (0-9).
+          
+          Applies to the codec selected by `--temp-codec`: * For `bgzf`, level 0 produces uncompressed (stored) BGZF blocks (fastest, uses most disk space); 1..=9 are libdeflate levels. * For `zstd`, only 1..=9 are valid; level 0 is rejected because zstd has no equivalent "stored" mode and silently remapping it to 1 would surprise users counting on uncompressed spill.
+          
+          Level 1 (default) provides fast compression with reasonable space savings. Higher levels (up to 9) provide better compression but are slower.
+          
+          [default: 1]
+
+      --temp-codec <TEMP_CODEC>
+          Codec used for temporary spill chunks: `zstd` (default) or `bgzf`.
+          
+          zstd is significantly faster than bgzf at comparable compression ratios for BAM-record data; we default to zstd because spill files are internal to the sort and never read by other tools. Pass `bgzf` to fall back to the legacy on-disk format.
+          
+          [default: zstd]
+
+      --max-temp-files <MAX_TEMP_FILES>
+          Maximum number of temporary spill files kept before the oldest are consolidated into a single run.
+          
+          Large inputs spill many sorted runs to disk. When the number of runs reaches this limit, the oldest are merged together in a single pass so the final k-way merge opens fewer files at once. That merge is the only reason the limit exists: it opens every remaining run at once, so the limit bounds how many file descriptors the sort needs.
+          
+          Consolidation rewrites data that is already sorted, so it is pure overhead whenever the descriptor budget could have carried the runs. Raising this avoids it on very large inputs (at the cost of more open file descriptors during the final merge); lowering it keeps fewer files open. Must be at least 2; to effectively disable consolidation, pass a value larger than the number of runs you expect to spill.
+          
+          "auto" (default) sizes the limit to the process's soft open-file limit (`ulimit -n`), less a reserve for the input, output and index handles, and capped at a tested maximum. Explicit values like "64", "256" pin it; a pinned value larger than the open-file budget is reported at startup. Must be at least 2.
+          
+          [default: auto]
+
+      --write-index [<true|false>]
+          Write BAM index (.bai) alongside output.
+          
+          Only valid for coordinate sort, and not with output to stdout (`-` / `/dev/stdout`): an index needs a seekable file and a sidecar path, so that combination is rejected rather than silently skipped.
+          
+          The index file will be written to `<output>.bai`. Output BGZF compression stays multi-threaded (scales with `--threads`); the BAI virtual offsets are recovered from each BGZF block as it finalizes, so indexing does not serialize compression.
+          
+          [default: false]
+
+      --read-streams <READ_STREAMS>
+          Concurrent streams to read the input BAM and the merge's spill files with: `auto`, or a fixed count.
+          
+          One blocking read keeps only about one read-ahead window outstanding at the device, which on network-attached storage is far below what it can serve -- and no buffer size fixes it, because a bigger single request is not more concurrency. How much that matters depends entirely on the storage: on EBS gp3 four streams took a whole-genome sort 28% faster, while on a direct-attached instance-store SSD one stream is already faster than four are on gp3 and adding more costs 1.8%.
+          
+          `auto` therefore measures instead of guessing. It starts at one stream -- exactly the pre-existing behaviour -- and doubles only while fills are occupying most of the read span, which is the condition under which concurrency has something to buy. It lands on four for gp3 and stays at one for `NVMe` without being told which is which.
+          
+          The streams are existing pool workers, not new threads, so this never exceeds `--threads`. Ignored for stdin and other non-seekable inputs, where positional reads do not exist.
+          
+          [default: auto]
+
+  -h, --help
+          Print help (see a summary with '-h')
