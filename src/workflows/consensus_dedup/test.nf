@@ -11,11 +11,18 @@ workflow test_wf {
   samples = res.resolve("samples.csv").splitCsv(header: true)
   assert samples.size() == 2 : "expected 2 samples in ${res.resolve('samples.csv')}, got ${samples.size()}"
 
-  output_ch = Channel.fromList(samples)
-    | map { row -> [row.id, [id: row.id, input: res.resolve(row.input), genome: res.resolve("genome")]] }
+  def runs = samples.collect { row ->
+    [id: row.id, input: res.resolve(row.input), genome: res.resolve("genome"),
+     cell_list: row.cell_list ? res.resolve(row.cell_list) : null]
+  }
+  // The first sample once more without a cell list, so cell calling runs too.
+  runs += [runs[0] + [id: runs[0].id + "_called", cell_list: null]]
+
+  output_ch = Channel.fromList(runs)
+    | map { r -> [r.id, r] }
     | consensus_dedup.run(
-        fromState: ["id", "input", "genome"],
-        toState: { id, output, state -> output + [input_bam: state.input] }
+        fromState: { id, state -> [id: id, input: state.input, genome: state.genome, cell_list: state.cell_list].findAll { it.value != null } },
+        toState: { id, output, state -> output + [input_bam: state.input, input_cell_list: state.cell_list] }
       )
     | view { output ->
         assert output.size() == 2 : "outputs should contain two elements: [id, state]"
@@ -30,11 +37,16 @@ workflow test_wf {
           family_size_histogram: state.output_family_size_histogram,
           grouping_metrics: state.output_grouping_metrics,
           simplex_stats: state.output_simplex_stats,
+          cell_list: state.output_cell_list,
+          cell_counts: state.output_cell_counts,
+          cell_qc: state.output_cell_qc,
+          knee_plot: state.output_knee_plot,
           input_bam: state.input_bam,
-        ]}
+          input_cell_list: state.input_cell_list,
+        ].findAll { it.value != null } }
       )
     | toSortedList()
     | map { output_list ->
-        assert output_list.size() == 2 : "output channel should contain two events"
+        assert output_list.size() == 3 : "output channel should contain three events"
       }
 }

@@ -12,8 +12,10 @@ die() {
 
 out=resources_test/consensus_dedup
 [[ -s "$out/samples.csv" ]] || die "$out/samples.csv not found; run consensus_dedup.sh first"
-while IFS=, read -r id input; do
-  [[ -s "$out/$input" ]] || die "$id: $out/$input is listed in samples.csv but missing"
+while IFS=, read -r id input cell_list; do
+  for file in "$input" "$cell_list"; do
+    [[ -s "$out/$file" ]] || die "$id: $out/$file is listed in samples.csv but missing"
+  done
 done < <(tail -n +2 "$out/samples.csv")
 [[ -n "$(ls -A "$out/genome" 2> /dev/null)" ]] || die "$out/genome is missing or empty"
 

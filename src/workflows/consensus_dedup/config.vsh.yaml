@@ -6,8 +6,12 @@ description: |
   (one well, cells tagged with `CB:Z:`), collapse duplicate read pairs of the
   same cell into fgumi single-strand consensus reads, re-align them with Bismark
   (directional), and put the cell barcode back on the read name and as a `CB`
-  tag. Outputs a coordinate-sorted, indexed BAM plus the fgumi and Bismark
-  reports.
+  tag. After grouping, cells are called from the number of distinct group ids
+  per barcode (kneedle knee, with a fallback to the top barcodes), and only
+  called cells go on to consensus calling. A cell list made elsewhere can be
+  passed instead, which skips cell calling. Outputs a coordinate-sorted, indexed
+  BAM plus the fgumi and Bismark reports, the cell list, and, when cells were
+  called, per-barcode counts, a cell-calling QC summary and a knee plot.
 license: MIT
 authors:
   - __merge__: /src/_authors/zhang_zhen.yaml
@@ -35,6 +39,14 @@ argument_groups:
         required: true
         description: Bismark genome directory, as written by `bismark prepare`.
         example: genome
+      - name: --cell_list
+        type: file
+        required: false
+        description: |
+          Cells to keep, as `barcode<TAB>count` without header (e.g. an old
+          `.QC.cell.lst`). When given, cell calling is skipped and this list is
+          used and published as `--output_cell_list`.
+        example: H0O260120CPL0071F1S_001.cell_list.tsv
 
   - name: Arguments
     arguments:
@@ -48,6 +60,23 @@ argument_groups:
         default: 2000
         min: 1
         description: Maximum insert size for valid paired-end alignments (`bismark -X`).
+      - name: --drop_lowest
+        type: integer
+        default: 1000
+        min: 0
+        description: Number of lowest-count barcodes dropped before looking for the knee.
+      - name: --max_cells
+        type: integer
+        default: 2000
+        min: 1
+        description: |
+          A knee that keeps this many cells or more counts as failed, and the
+          top `--fallback_cells` barcodes are kept instead.
+      - name: --fallback_cells
+        type: integer
+        default: 1000
+        min: 1
+        description: Number of top barcodes kept when the knee fails (all barcodes if fewer).
 
   - name: Output
     arguments:
@@ -83,6 +112,35 @@ argument_groups:
         required: true
         default: "$id.grouping_metrics.txt"
         description: "`fgumi group` grouping metrics."
+      - name: --output_cell_list
+        type: file
+        direction: output
+        required: true
+        default: "$id.cell_list.tsv"
+        description: |
+          Cells kept, as `barcode<TAB>count` without header: the called cells with
+          their distinct `MI` group ids, or a copy of `--cell_list` when given.
+      - name: --output_cell_counts
+        type: file
+        direction: output
+        required: false
+        default: "$id.cell_counts.tsv"
+        description: |
+          Every barcode in the `fgumi group` output with its number of distinct
+          `MI` group ids, as `barcode<TAB>count`, no header. Not written when
+          `--cell_list` is given.
+      - name: --output_cell_qc
+        type: file
+        direction: output
+        required: false
+        default: "$id.cell_qc.tsv"
+        description: One-line cell-calling QC summary, with header. Not written when `--cell_list` is given.
+      - name: --output_knee_plot
+        type: file
+        direction: output
+        required: false
+        default: "$id.knee_plot.png"
+        description: 4-panel knee plot of the cell calling. Not written when `--cell_list` is given.
       - name: --output_simplex_stats
         type: file
         direction: output
@@ -107,6 +165,8 @@ dependencies:
   - name: samtools/samtools_fixmate
   - name: fgumi/fgumi_sort
   - name: fgumi/fgumi_group
+  - name: call_cells
+  - name: filter_cells
   - name: fgumi/fgumi_simplex
   - name: bismark/bismark_align
   - name: restore_cell_barcode

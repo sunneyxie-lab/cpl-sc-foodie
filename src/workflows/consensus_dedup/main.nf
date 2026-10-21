@@ -44,9 +44,30 @@ workflow run_wf {
           "grouping_metrics": "grouping_metrics",
         ]
       )
-    | fgumi_simplex.run(
+    // A passed-in cell_list takes the state key call_cells would write.
+    | call_cells.run(
+        runIf: { id, state -> !state.cell_list },
         fromState: { id, state -> [
           input: state.grouped_bam,
+          id: id,
+          drop_lowest: state.drop_lowest,
+          max_cells: state.max_cells,
+          fallback_cells: state.fallback_cells,
+        ]},
+        toState: [
+          "cell_list": "output_cell_list",
+          "cell_counts": "output_cell_counts",
+          "cell_qc": "output_cell_qc",
+          "knee_plot": "output_knee_plot",
+        ]
+      )
+    | filter_cells.run(
+        fromState: ["input": "grouped_bam", "cell_list": "cell_list"],
+        toState: ["cells_bam": "output"]
+      )
+    | fgumi_simplex.run(
+        fromState: { id, state -> [
+          input: state.cells_bam,
           min_reads: state.min_reads,
           read_name_prefix: id,
         ]},
@@ -99,6 +120,10 @@ workflow run_wf {
         "output_family_size_histogram": "family_size_histogram",
         "output_grouping_metrics": "grouping_metrics",
         "output_simplex_stats": "simplex_stats",
+        "output_cell_list": "cell_list",
+        "output_cell_counts": "cell_counts",
+        "output_cell_qc": "cell_qc",
+        "output_knee_plot": "knee_plot",
       ])
 
   emit:

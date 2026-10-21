@@ -5,7 +5,10 @@ description: |
   Inspects one sample's `consensus_dedup` outputs and asserts the pipeline's
   contract: a valid, coordinate-sorted, indexed BAM whose read names are
   `<id>:<MI>_CB:Z:<barcode>` with a matching `CB` tag, barcodes that all occur
-  as read name suffixes in the sample's input BAM, and non-empty reports.
+  as read name suffixes in the sample's input BAM and are all in the cell list,
+  and non-empty reports. With a passed-in cell list, the published cell list
+  equals it and no cell-calling QC is published; without one, the cell-calling
+  outputs are all present and non-empty.
 authors:
   - __merge__: /src/_authors/zhang_zhen.yaml
     roles: [author, maintainer]
@@ -48,11 +51,36 @@ argument_groups:
         required: true
         description: The pipeline's `--output_simplex_stats`.
         example: sample.simplex_stats.txt
+      - name: --cell_list
+        type: file
+        required: true
+        description: The pipeline's `--output_cell_list`.
+        example: sample.cell_list.tsv
+      - name: --cell_counts
+        type: file
+        required: false
+        description: The pipeline's `--output_cell_counts`.
+        example: sample.cell_counts.tsv
+      - name: --cell_qc
+        type: file
+        required: false
+        description: The pipeline's `--output_cell_qc`.
+        example: sample.cell_qc.tsv
+      - name: --knee_plot
+        type: file
+        required: false
+        description: The pipeline's `--output_knee_plot`.
+        example: sample.knee_plot.png
       - name: --input_bam
         type: file
         required: true
         description: The BAM the pipeline was run on for this sample.
         example: sample.bam
+      - name: --input_cell_list
+        type: file
+        required: false
+        description: The `--cell_list` passed to the pipeline, if any.
+        example: sample.cell_list.tsv
 
 resources:
   - type: bash_script

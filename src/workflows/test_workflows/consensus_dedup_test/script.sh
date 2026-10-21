@@ -23,6 +23,20 @@ check_file_not_empty "$par_bismark_report" "Bismark report"
 check_file_not_empty "$par_family_size_histogram" "family size histogram"
 check_file_not_empty "$par_grouping_metrics" "grouping metrics"
 check_file_not_empty "$par_simplex_stats" "simplex stats"
+check_file_not_empty "$par_cell_list" "cell list"
+if [[ -n "${par_input_cell_list:-}" ]]; then
+  cmp "$par_cell_list" "$par_input_cell_list" || { log_error "published cell list differs from the passed-in one"; exit 1; }
+  log "✓ Published cell list equals the passed-in list"
+  if [[ -n "${par_cell_counts:-}${par_cell_qc:-}${par_knee_plot:-}" ]]; then
+    log_error "cell-calling outputs were published although a cell list was passed in"
+    exit 1
+  fi
+  log "✓ No cell-calling outputs with a passed-in list"
+else
+  check_file_not_empty "$par_cell_counts" "cell counts"
+  check_file_not_empty "$par_cell_qc" "cell QC summary"
+  check_file_not_empty "$par_knee_plot" "knee plot"
+fi
 
 out_barcodes="$meta_temp_dir/out_barcodes.txt"
 # IDs may contain "_", so split at the last "_CB:Z:" and compare the ID as a literal string.
@@ -46,6 +60,14 @@ samtools view "$par_output_bam" | awk -F'\t' -v id="$par_id" -v out="$out_barcod
   }
 ' || { log_error "read name / CB tag check failed for $par_id"; exit 1; }
 sort -u -o "$out_barcodes" "$out_barcodes"
+cell_barcodes="$meta_temp_dir/cell_barcodes.txt"
+cut -f1 "$par_cell_list" | sort -u > "$cell_barcodes"
+not_cells=$(comm -23 "$out_barcodes" "$cell_barcodes")
+if [[ -n "$not_cells" ]]; then
+  log_error "barcodes not in the cell list: $(head -5 <<< "$not_cells" | tr '\n' ' ')"
+  exit 1
+fi
+log "✓ Every output barcode is in the cell list"
 n_barcodes=$(wc -l < "$out_barcodes")
 [[ "$n_barcodes" -ge 2 ]] || { log_error "expected at least 2 distinct barcodes, got $n_barcodes"; exit 1; }
 log "✓ Every read name is $par_id:<MI>_CB:Z:<barcode> with a matching CB tag ($n_barcodes barcodes)"

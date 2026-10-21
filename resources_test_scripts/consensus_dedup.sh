@@ -19,6 +19,14 @@ SOURCE_BAMS=(
   /lustre/grp/xxllab/fangj/03.project/02.snFOODIE/H0O260120CPL0071F1S/reRun/Align_bam/H0O260120CPL0071F1S_001.bam
   /lustre/grp/xxllab/fangj/03.project/02.snFOODIE/H0O260120CPL0071F1S/reRun/Align_bam/H0O260120CPL0071F1S_002.bam
 )
+# The old process's cell lists, from the same run as SOURCE_BAMS and in the same order.
+CELL_LISTS=(
+  /lustre/grp/xxllab/fangj/03.project/02.snFOODIE/H0O260120CPL0071F1S/results/bam_cell_count/H0O260120CPL0071F1S/H0O260120CPL0071F1S_001/H0O260120CPL0071F1S_001.bam.QC.cell.lst
+  /lustre/grp/xxllab/fangj/03.project/02.snFOODIE/H0O260120CPL0071F1S/results/bam_cell_count/H0O260120CPL0071F1S/H0O260120CPL0071F1S_002/H0O260120CPL0071F1S_002.bam.QC.cell.lst
+)
+# A real cell should almost always have reads in the subset; fewer list barcodes
+# found there points to a cell list that doesn't belong to the BAM.
+MIN_CELL_LIST_SHARE=90
 REFERENCE_FASTA=/lustre/grp/xxllab/zhangzhen/FOODIE_Training_CP_20260305/resources/GRCh38/genome.fa
 REGION_CHROM=chr14
 REGION_START=18200001   # 1-based, inclusive
@@ -36,7 +44,7 @@ case "${1:-}" in
   *) die "unknown argument $1; the only option is --reuse-subsets" ;;
 esac
 
-for path in "${SOURCE_BAMS[@]}" "$REFERENCE_FASTA"; do
+for path in "${SOURCE_BAMS[@]}" "${CELL_LISTS[@]}" "$REFERENCE_FASTA"; do
   [[ -r "$path" ]] || die "cannot read $path; run this on the lab cluster"
 done
 
@@ -62,7 +70,7 @@ resources_test_scripts/cluster_images.sh --check \
 
 out=resources_test/consensus_dedup
 if [[ "$reuse_subsets" == true ]]; then
-  rm -rf "$out/genome" "$out/samples.csv"
+  rm -rf "$out/genome" "$out/samples.csv" "$out"/*.cell_list.tsv
 else
   rm -rf "$out"
 fi
@@ -128,6 +136,24 @@ for i in "${!pids[@]}"; do
 done
 [[ "$failed" == false ]] || exit 1
 
+for i in "${!SOURCE_BAMS[@]}"; do
+  id=$(basename "${SOURCE_BAMS[$i]}" .bam)
+  list="$out/$id.cell_list.tsv"
+  cp "${CELL_LISTS[$i]}" "$list" || die "$id: copying ${CELL_LISTS[$i]} failed"
+  [[ -s "$list" ]] || die "$id: cell list ${CELL_LISTS[$i]} is empty"
+
+  cut -f1 "$list" | sort -T "$tmp" -u > "$tmp/$id.list_barcodes" \
+    || die "$id: reading cell list barcodes failed"
+  samtools view "$out/$id.bam" | cut -f1 | sed 's/.*_CB:Z://' | sort -T "$tmp" -u > "$tmp/$id.bam_barcodes" \
+    || die "$id: reading subset barcodes failed"
+  n_listed=$(wc -l < "$tmp/$id.list_barcodes")
+  n_found=$(comm -12 "$tmp/$id.list_barcodes" "$tmp/$id.bam_barcodes" | wc -l)
+  share=$(( 100 * n_found / n_listed ))
+  echo "$id: $n_found/$n_listed cell list barcodes ($share%) occur in the subset"
+  (( share >= MIN_CELL_LIST_SHARE )) \
+    || die "$id: only $share% of the cell list barcodes occur in the subset, expected at least $MIN_CELL_LIST_SHARE%"
+done
+
 echo "Extracting $REGION_CHROM from $REFERENCE_FASTA"
 # No early exit from awk: it would SIGPIPE zcat and fail the pipeline under pipefail.
 zcat -f "$REFERENCE_FASTA" \
@@ -154,10 +180,10 @@ nextflow run target/nextflow/bismark/bismark_prepare/main.nf \
 cp -r "$tmp/prepare/genome" "$out/genome"
 
 {
-  echo "id,input"
+  echo "id,input,cell_list"
   for bam in "${SOURCE_BAMS[@]}"; do
     id=$(basename "$bam" .bam)
-    echo "$id,$id.bam"
+    echo "$id,$id.bam,$id.cell_list.tsv"
   done
 } > "$out/samples.csv"
 
