@@ -53,12 +53,16 @@ samtools view "$par_output_bam" | awk -F'\t' -v id="$par_id" -v out="$out_barcod
     if (colon == 0 || substr(prefix, 1, colon - 1) != id || mi !~ /^[0-9]+$/) {
       print "read name is not <id>:<MI>_CB:Z:<barcode>: " name > "/dev/stderr"; exit 1
     }
-    tag = ""
-    for (i = 12; i <= NF; i++) if (substr($i, 1, 5) == "CB:Z:") { tag = substr($i, 6); break }
+    tag = ""; cd = ""
+    for (i = 12; i <= NF; i++) {
+      if (substr($i, 1, 5) == "CB:Z:") tag = substr($i, 6)
+      else if (substr($i, 1, 5) == "cD:i:") cd = substr($i, 6)
+    }
     if (tag != suffix) { print "CB tag \"" tag "\" does not match read name " name > "/dev/stderr"; exit 1 }
+    if (cd !~ /^[0-9]+$/ || cd < 1) { print "read " name " lacks a cD:i:<n> tag with n >= 1" > "/dev/stderr"; exit 1 }
     if (!(tag in seen)) { seen[tag] = 1; print tag > out }
   }
-' || { log_error "read name / CB tag check failed for $par_id"; exit 1; }
+' || { log_error "read name / CB / cD tag check failed for $par_id"; exit 1; }
 sort -u -o "$out_barcodes" "$out_barcodes"
 cell_barcodes="$meta_temp_dir/cell_barcodes.txt"
 cut -f1 "$par_cell_list" | sort -u > "$cell_barcodes"
@@ -70,7 +74,7 @@ fi
 log "✓ Every output barcode is in the cell list"
 n_barcodes=$(wc -l < "$out_barcodes")
 [[ "$n_barcodes" -ge 2 ]] || { log_error "expected at least 2 distinct barcodes, got $n_barcodes"; exit 1; }
-log "✓ Every read name is $par_id:<MI>_CB:Z:<barcode> with a matching CB tag ($n_barcodes barcodes)"
+log "✓ Every read name is $par_id:<MI>_CB:Z:<barcode> with a matching CB tag and a cD tag ($n_barcodes barcodes)"
 
 in_barcodes="$meta_temp_dir/in_barcodes.txt"
 samtools view "$par_input_bam" | awk -F'\t' '

@@ -1,10 +1,11 @@
-name: restore_cell_barcode
+name: restore_consensus_tags
 description: |
-  Put the cell barcode back on re-aligned consensus reads. Joins the aligned
-  BAM with the fgumi consensus BAM on read name, renames each record to
-  `<name>_CB:Z:<barcode>` and appends a `CB:Z:<barcode>` tag. Fails if a read
-  name has no barcode in the consensus BAM.
-keywords: [cell barcode, single cell, bam]
+  Put the cell barcode and family size back on re-aligned consensus reads.
+  Joins the aligned BAM with the fgumi consensus BAM on read name and mate
+  (0x40/0x80), renames each record to `<name>_CB:Z:<barcode>` and appends
+  `CB:Z:<barcode>` and that mate's `cD:i:<family size>`. Fails if a consensus
+  record lacks `CB` or `cD`, or an aligned record has no consensus mate.
+keywords: [cell barcode, family size, consensus, single cell, bam]
 license: MIT
 authors:
   - __merge__: /src/_authors/zhang_zhen.yaml
@@ -23,7 +24,7 @@ argument_groups:
         type: file
         required: true
         must_exist: true
-        description: Consensus BAM from `fgumi simplex`; every record carries `CB:Z:`.
+        description: Consensus BAM from `fgumi simplex`; every record carries `CB:Z:` and `cD:i:`.
         example: consensus.bam
 
   - name: Output
@@ -32,7 +33,7 @@ argument_groups:
         type: file
         direction: output
         required: true
-        description: BAM with renamed, `CB`-tagged records, in input order.
+        description: BAM with renamed records tagged `CB` and `cD`, in input order.
         example: tagged.bam
 
 resources:

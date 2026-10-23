@@ -4,7 +4,8 @@ scope: test
 description: |
   Inspects one sample's `consensus_dedup` outputs and asserts the pipeline's
   contract: a valid, coordinate-sorted, indexed BAM whose read names are
-  `<id>:<MI>_CB:Z:<barcode>` with a matching `CB` tag, barcodes that all occur
+  `<id>:<MI>_CB:Z:<barcode>` with a matching `CB` tag and a `cD:i:<n>` tag
+  (n >= 1), barcodes that all occur
   as read name suffixes in the sample's input BAM and are all in the cell list,
   and non-empty reports. With a passed-in cell list, the published cell list
   equals it and no cell-calling QC is published; without one, the cell-calling

@@ -97,7 +97,7 @@ workflow run_wf {
         ],
         toState: ["bismark_bam": "output", "bismark_report": "report"]
       )
-    | restore_cell_barcode.run(
+    | restore_consensus_tags.run(
         fromState: ["input": "bismark_bam", "consensus": "consensus_bam"],
         toState: ["tagged_bam": "output"]
       )

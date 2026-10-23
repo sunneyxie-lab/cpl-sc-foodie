@@ -6,8 +6,9 @@ description: |
   (one well, cells tagged with `CB:Z:`), collapse duplicate read pairs of the
   same cell into fgumi single-strand consensus reads, re-align them with Bismark
   (directional), and put the cell barcode back on the read name and as a `CB`
-  tag. After grouping, cells are called from the number of distinct group ids
-  per barcode (kneedle knee, with a fallback to the top barcodes), and only
+  tag, and the consensus family size as a `cD` tag. After grouping, cells are
+  called from the number of distinct group ids per barcode (kneedle knee, with
+  a fallback to the top barcodes), and only
   called cells go on to consensus calling. A cell list made elsewhere can be
   passed instead, which skips cell calling. Outputs a coordinate-sorted, indexed
   BAM plus the fgumi and Bismark reports, the cell list, and, when cells were
@@ -87,7 +88,8 @@ argument_groups:
         default: "$id.consensus_dedup.bam"
         description: |
           Coordinate-sorted BAM of re-aligned consensus reads. Read names are
-          `<id>:<MI>_CB:Z:<barcode>`, and every record carries `CB:Z:<barcode>`.
+          `<id>:<MI>_CB:Z:<barcode>`, and every record carries `CB:Z:<barcode>`
+          and its consensus family size as `cD:i:<n>` (from `fgumi simplex`, per mate).
       - name: --output_bai
         type: file
         direction: output
@@ -169,7 +171,7 @@ dependencies:
   - name: filter_cells
   - name: fgumi/fgumi_simplex
   - name: bismark/bismark_align
-  - name: restore_cell_barcode
+  - name: restore_consensus_tags
   - name: samtools/samtools_fastq
     repository: biobox
   - name: samtools/samtools_index
