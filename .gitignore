@@ -11,3 +11,7 @@ trace*.txt
 *_test.output/
 resources_test/
 logs/
+legacy/
+output/
+results/
+__pycache__/
