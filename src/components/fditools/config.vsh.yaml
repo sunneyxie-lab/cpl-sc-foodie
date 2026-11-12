@@ -1,0 +1,118 @@
+name: fditools
+description: |
+  Extract FOODIE cell barcodes using fdi 0.1.0 built from the public MIT-licensed
+  fditools source tag 0.1.0.
+  Fixed match length 11, skip length 19 and gzip output. Short aliases map
+  read1/read2/bc_whitelist/output_read1/output_read2 to -a/-b/-w/-c/-d.
+  Barcodes concatenate the two matched halves without a separator.
+  Multi-stage Docker builds use Rust 1.97.1 and the committed Cargo.lock with --locked.
+  Only the binary and license are copied from the builder into the runtime stage.
+  Build with `viash build src/components/fditools/config.vsh.yaml --setup cachedbuild`.
+  No release credentials or local legacy/ directory are needed for image builds.
+  Pulling the private image requires GHCR authentication.
+  Supports Linux x86-64 with glibc, not ARM or musl.
+  Component tests generate synthetic FASTQs and a whitelist; real regional data
+  is reserved for workflow integration tests.
+  Reads and writes gzip directly at all CPU budgets, using synchronous output
+  compression (-T 1) without intermediate plain FASTQs.
+keywords: [foodie, barcode, fastq]
+license: MIT
+requirements:
+  commands: [fdi, mktemp, mv]
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --read1
+        alternatives: -a
+        type: file
+        required: true
+        must_exist: true
+        description: Original paired FASTQ, read 1.
+      - name: --read2
+        alternatives: -b
+        type: file
+        required: true
+        must_exist: true
+        description: Original paired FASTQ, read 2.
+      - name: --bc_whitelist
+        alternatives: -w
+        type: file
+        required: true
+        must_exist: true
+        description: Barcode whitelist passed unchanged to fdi.
+  - name: Output
+    arguments:
+      - name: --output_read1
+        alternatives: -c
+        type: file
+        direction: output
+        required: true
+        description: Extracted read 1 in gzip FASTQ format.
+      - name: --output_read2
+        alternatives: -d
+        type: file
+        direction: output
+        required: true
+        description: Extracted read 2 in gzip FASTQ format.
+resources:
+  - type: bash_script
+    path: script.sh
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+engines:
+  - type: docker
+    image: debian:bookworm-slim
+    setup:
+      - type: apt
+        packages: [build-essential, cmake, libclang-dev, pkg-config, libssl-dev, libbz2-dev, liblzma-dev, zlib1g-dev, xz-utils, ca-certificates, curl]
+      # Viash 0.9.7 has no FROM setup field; keep the stage boundary in this literal block.
+      - type: docker
+        run:
+          - |-
+            set -eu; \
+            for component in rustc rust-std cargo; do \
+              curl --fail --location --silent --show-error \
+                "https://static.rust-lang.org/dist/${component}-1.97.1-x86_64-unknown-linux-gnu.tar.xz" \
+                --output "/tmp/${component}.tar.xz"; \
+            done; \
+            printf '%s\n' \
+              '9819d0a32d56bd339585319c80260e332779f5541fd66838ab7e016d6c814819  /tmp/rustc.tar.xz' \
+              '1c1e704ae80126b7de34f72ea2825f7fd01736dec20732faed47374b95282fba  /tmp/rust-std.tar.xz' \
+              'e1be5f5ff7f7f80ca506fb65770b759edbdc6d303781ed71c5de8ec8a8394779  /tmp/cargo.tar.xz' | \
+              sha256sum -c -; \
+            for component in rustc rust-std cargo; do \
+              tar -xJf "/tmp/${component}.tar.xz" -C /tmp; \
+              "/tmp/${component}-1.97.1-x86_64-unknown-linux-gnu/install.sh" \
+                --prefix=/tmp/fditools-rust --disable-ldconfig; \
+            done; \
+            mkdir /tmp/fditools-source; \
+            curl --fail --location --silent --show-error \
+              https://github.com/zhangzhen/fditools/archive/refs/tags/0.1.0.tar.gz \
+              --output /tmp/fditools-source.tar.gz; \
+            tar -xzf /tmp/fditools-source.tar.gz --strip-components=1 -C /tmp/fditools-source; \
+            cd /tmp/fditools-source; \
+            PATH="/tmp/fditools-rust/bin:$PATH" CARGO_HOME=/tmp/fditools-cargo \
+              cargo build --release --locked; \
+            install -Dm 755 target/release/fdi /out/bin/fdi; \
+            install -Dm 644 LICENSE /out/share/licenses/fditools/LICENSE
+            FROM debian:bookworm-slim AS runtime
+      - type: apt
+        packages: [libgcc-s1, procps]
+      - type: docker
+        copy:
+          - --from=0 /out/ /usr/local/
+        run:
+          - fdi --version > /var/software_versions.txt
+    test_setup:
+      - type: apt
+        packages: [python3]
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, lowmem]

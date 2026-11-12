@@ -1,0 +1,190 @@
+name: raw_fastq_align
+namespace: workflows
+scope: public
+description: |
+  Process paired raw FOODIE FASTQs through raw FastQC/statistics, fditools barcode
+  extraction, extracted FastQC, Rust Trim Galore and first-pass Rust Bismark.
+  Supply a prepared Bismark genome directory containing reference FASTAs and indexes.
+  The BAM preserves terminal _CB:Z:<barcode> QNAME suffixes and has no CB auxiliary
+  tags. Pass it directly as input to workflows/consensus_dedup with the same genome.
+  Fixed extraction uses match length 11, skip length 19 and the supplied whitelist.
+  Trimming uses quality 20, stringency 2, error rate 0.1, legacy three-adapter
+  selection and no automatic poly-G trimming. Alignment is non-directional, maxins 2000.
+  QC lists are ordered R1 then R2; published wildcard indices are 0 and 1.
+
+  fdi 0.1.0 is built from the public MIT-licensed fditools source tag 0.1.0
+  using pinned Rust 1.97.1 and Cargo.lock in a separate Docker build stage.
+  Barcodes concatenate the matched halves without a separator.
+  Rebuild with `viash build src/components/fditools/config.vsh.yaml --setup cachedbuild`.
+  No release credentials or local legacy/ directory are required. The published
+  image remains private on GHCR. Linux x86-64/glibc only; ARM and musl are unsupported.
+  Rust Trim Galore is pinned to 2.3.0. The test-only compatibility baseline is
+  official Perl Trim Galore 0.6.11 with Cutadapt 5.2, independently auto-selecting
+  its adapter on every complete extracted regional sample.
+
+  Build with `viash ns build --parallel --setup cachedbuild`, then for example:
+  `nextflow run target/nextflow/workflows/raw_fastq_align/main.nf -profile docker
+  --id sample --read1 sample.R1.fastq.gz --read2 sample.R2.fastq.gz
+  --whitelist assets/barcodes.txt --genome resources_test/common/genome`.
+  In a composed workflow, pass `[id, [id: id, input: producer.output_bam,
+  genome: genome]]` directly to consensus_dedup.run. The producer does not
+  sort, index, add CB tags, call cells or deduplicate. The consumer owns those steps.
+
+  Generate common first on cluster login with
+  `bash resources_test_scripts/cluster/common.sh --resources-dir <root>`.
+  Common independently owns the full chr14 genome and unchanged external cell
+  lists. Submit original-raw generation on a cpu1/cpu2 cluster allocation with
+  `sbatch resources_test_scripts/cluster/generate/raw_fastq_align.sh --resources-dir <root>`.
+  It requires source access, Python 3, samtools >=1.12 and bqtools 0.6.1.
+  Python independently checks every original pair through EOF and audits selected
+  originals before bqtools encodes the gzipped R1/R2 files directly. CBQ header
+  grep determines matching identities and validates their full headers, sequences
+  and qualities against the audits. Final fixtures use those original audits,
+  preserving all four lines verbatim and source order. Auditing and encoding each
+  read the full original sources. LF and CRLF originals retain their line endings.
+  Private full-source CBQ files remain in <root>/.raw_fastq_align_cbq
+  (or RAW_FASTQ_ALIGN_CBQ_CACHE), with private source/count metadata and archive paths.
+  They are not regional test fixtures and are not transferred.
+  Generators refuse existing final directories and stage privately on shared storage.
+  Publication uses exclusive directory creation and hard links, with completion last.
+  Incomplete final directories fail validation and require explicit cleanup. Schema 3
+  binds regional files to common's payload hashes. No per-sample provenance files
+  are distributed; original/CBQ/final gzip checks remain generation-time checks.
+  Never reuse partial gzip files or incomplete staging directories.
+  Shell tools default to the checkout's resources_test root.
+
+  Locally, download common first with `bash resources_test_scripts/local/download.sh
+  common --resources-dir <root>`, then download raw_fastq_align with the same command.
+  Run `src/workflows/raw_fastq_align/integration_test.sh --resources_test <root>`
+  for both original-raw samples, full Perl/Rust parity and unchanged BAM handoff
+  into consensus_dedup with common's cell lists. No consensus BAM fixtures are
+  needed. Python 3 is required on the Nextflow test controller, which validates
+  completion, payload hashes and common dependencies before submitting tasks.
+  Resume failed Nextflow tasks with `-resume`. See resources_test_scripts/README.md
+  for generation, selected-set OSS transfers and failure recovery.
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --id
+        type: string
+        required: true
+        description: Sample ID with no whitespace or leading @.
+        example: H0O260120CPL0071F1S_001
+      - name: --read1
+        type: file
+        required: true
+        must_exist: true
+        description: Original paired raw R1 gzip FASTQ.
+        example: sample.R1.fastq.gz
+      - name: --read2
+        type: file
+        required: true
+        must_exist: true
+        description: Original paired raw R2 gzip FASTQ.
+        example: sample.R2.fastq.gz
+      - name: --whitelist
+        type: file
+        required: true
+        must_exist: true
+        description: Matching barcode whitelist consumed unchanged by fdi.
+        example: assets/barcodes.txt
+      - name: --genome
+        type: file
+        required: true
+        must_exist: true
+        description: Prepared Bismark reference directory with FASTAs and indexes.
+        example: resources_test/common/genome
+  - name: Output
+    arguments:
+      - name: --output_bam
+        type: file
+        direction: output
+        required: true
+        default: "$id.raw_fastq_align.bam"
+        description: First-pass paired BAM retaining barcode QNAME suffixes, without CB auxiliary tags.
+      - name: --output_bismark_report
+        type: file
+        direction: output
+        required: true
+        default: "$id.first_pass_bismark_PE_report.txt"
+        description: First-pass paired Bismark alignment report.
+      - name: --output_raw_stats
+        type: file
+        direction: output
+        required: true
+        default: "$id.raw.stats.tsv"
+        description: Full SeqKit statistics, raw R1 then R2.
+      - name: --output_extracted_trimmed_stats
+        type: file
+        direction: output
+        required: true
+        default: "$id.extracted_trimmed.stats.tsv"
+        description: Full statistics, extracted R1/R2 then trimmed R1/R2.
+      - name: --output_raw_fastqc_html
+        type: file
+        direction: output
+        required: true
+        multiple: true
+        default: "$id.raw_fastqc.*.html"
+        description: Both raw FastQC HTML reports in R1/R2 order (indices 0/1).
+      - name: --output_raw_fastqc_zip
+        type: file
+        direction: output
+        required: true
+        multiple: true
+        default: "$id.raw_fastqc.*.zip"
+        description: Both raw FastQC ZIP reports in R1/R2 order (indices 0/1).
+      - name: --output_extracted_fastqc_html
+        type: file
+        direction: output
+        required: true
+        multiple: true
+        default: "$id.extracted_fastqc.*.html"
+        description: Both extracted FastQC HTML reports in R1/R2 order (indices 0/1).
+      - name: --output_extracted_fastqc_zip
+        type: file
+        direction: output
+        required: true
+        multiple: true
+        default: "$id.extracted_fastqc.*.zip"
+        description: Both extracted FastQC ZIP reports in R1/R2 order (indices 0/1).
+      - name: --output_trimmed_fastqc_html
+        type: file
+        direction: output
+        required: true
+        multiple: true
+        default: "$id.trimmed_fastqc.*.html"
+        description: Both trimmed FastQC HTML reports in R1/R2 order (indices 0/1).
+      - name: --output_trimmed_fastqc_zip
+        type: file
+        direction: output
+        required: true
+        multiple: true
+        default: "$id.trimmed_fastqc.*.zip"
+        description: Both trimmed FastQC ZIP reports in R1/R2 order (indices 0/1).
+resources:
+  - type: nextflow_script
+    path: main.nf
+    entrypoint: run_wf
+test_resources:
+  - type: nextflow_script
+    path: test.nf
+    entrypoint: test_wf
+  - path: /resources_test/raw_fastq_align
+  - path: /resources_test/common
+  - path: /resources_test_scripts/share
+    dest: resources_test_scripts/share
+  - path: /assets/barcodes.txt
+dependencies:
+  - name: fditools
+  - name: seqkit
+  - name: trim_galore
+  - name: bismark/bismark_align
+  - name: fastqc
+    repository: biobox
+runners:
+  - type: nextflow

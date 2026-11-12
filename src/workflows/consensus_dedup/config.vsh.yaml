@@ -13,6 +13,26 @@ description: |
   passed instead, which skips cell calling. Outputs a coordinate-sorted, indexed
   BAM plus the fgumi and Bismark reports, the cell list, and, when cells were
   called, per-barcode counts, a cell-calling QC summary and a knee plot.
+
+  Test fixtures keep the full chr14 genome and unchanged cell lists in
+  resources_test/common, independently of the consensus BAMs. Generate common
+  first on cluster login with `bash resources_test_scripts/cluster/common.sh
+  --resources-dir <root>`, then submit
+  `sbatch resources_test_scripts/cluster/generate/consensus_dedup.sh --resources-dir <root>`.
+  Both generators refuse any existing final directory, stage privately on shared
+  storage and publish completion last using exclusive creation and hard links.
+  Incomplete final directories fail validation and require explicit cleanup.
+  BAM selection uses inclusive
+  chr14 alignment and mate starts from 23661200 through 24661200, without cropping
+  the reference or cell lists. Listed-barcode overlap must be positive.
+  Locally, download common first with `bash resources_test_scripts/local/download.sh
+  common --resources-dir <root>`, then download consensus_dedup with the same command.
+  Run `src/workflows/consensus_dedup/integration_test.sh --resources_test <root>`.
+  Python 3 is required on the Nextflow test controller. Before submitting tasks,
+  the test validates schema-3 completion, payload checksums and common dependencies.
+  The integration retains both supplied-list samples and an extra cell-calling run.
+  See resources_test_scripts/README.md for generation, selected-set OSS transfers
+  and failure recovery. Shell tools default to the checkout's resources_test root.
 license: MIT
 authors:
   - __merge__: /src/_authors/zhang_zhen.yaml
@@ -160,6 +180,9 @@ test_resources:
     path: test.nf
     entrypoint: test_wf
   - path: /resources_test/consensus_dedup
+  - path: /resources_test/common
+  - path: /resources_test_scripts/share
+    dest: resources_test_scripts/share
 
 dependencies:
   - name: tag_cell_barcode

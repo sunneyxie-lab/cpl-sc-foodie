@@ -1,0 +1,51 @@
+```sh
+fdi --help
+```
+
+Commands for generating per-base analysis
+
+Usage: fdi <COMMAND>
+
+Commands:
+  cell-barcode  
+  help          Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+
+```sh
+fdi cell-barcode --help
+```
+
+Usage: fdi cell-barcode [OPTIONS] --in-reads1 <IN_READS1> --in-reads2 <IN_READS2> --out-reads1 <OUT_READS1> --out-reads2 <OUT_READS2> --bc-whitelist <BC_WHITELIST> --match-len <MATCH_LEN> --skip-len <SKIP_LEN>
+
+Options:
+  -a, --in-reads1 <IN_READS1>
+          Input fastq file R1
+  -b, --in-reads2 <IN_READS2>
+          Input fastq file R2
+  -c, --out-reads1 <OUT_READS1>
+          Output fastq file R1
+  -d, --out-reads2 <OUT_READS2>
+          Output fastq file R2
+  -w, --bc-whitelist <BC_WHITELIST>
+          
+  -t, --threads <THREADS>
+          Number of CPU cores to use [default: 8]
+  -n, --num-chunks <NUM_CHUNKS>
+          [default: 100]
+  -C, --chunksize <CHUNKSIZE>
+          [default: 1000]
+  -m, --match-len <MATCH_LEN>
+          barcode match length at the 5' end
+  -s, --skip-len <SKIP_LEN>
+          skip the number of bases following the barcode at the 5' end
+  -Z, --gzip
+          Optionally b-gzip the output
+  -T, --compression-threads <COMPRESSION_THREADS>
+          The number of threads to use for compressing output (specified by --gzip) [default: 4]
+  -L, --compression-level <COMPRESSION_LEVEL>
+          The level to use for compressing output (specified by --gzip) [default: 6]
+  -h, --help
+          Print help

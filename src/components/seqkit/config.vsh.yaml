@@ -1,0 +1,50 @@
+name: seqkit
+description: |
+  Full FASTQ statistics using SeqKit 2.14.0. Writes one tab-separated header
+  and one row per input, preserving caller order, with length, quality and
+  GC metrics from stats --all. Statistics always use one thread.
+keywords: [fastq, statistics, quality]
+links:
+  homepage: https://bioinf.shenwei.me/seqkit/
+  repository: https://github.com/shenwei356/seqkit
+license: MIT
+requirements:
+  commands: [seqkit, mktemp, mv]
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        multiple: true
+        required: true
+        must_exist: true
+        description: FASTQ files in the desired statistics row order.
+  - name: Output
+    arguments:
+      - name: --out_file
+        alternatives: -o
+        type: file
+        direction: output
+        required: true
+        description: Full statistics as a tab-separated table.
+resources:
+  - type: bash_script
+    path: script.sh
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+engines:
+  - type: docker
+    image: quay.io/biocontainers/seqkit:2.14.0--hb192632_0
+    setup:
+      - type: docker
+        run: seqkit version > /var/software_versions.txt
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [singlecpu, lowmem]

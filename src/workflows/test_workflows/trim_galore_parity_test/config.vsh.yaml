@@ -1,0 +1,69 @@
+name: trim_galore_parity_test
+namespace: test_workflows
+scope: test
+description: |
+  Compares complete Rust trimmed pairs from separate reruns of the production
+  fditools and trim_galore components with independently executed official Perl
+  Trim Galore 0.6.11 and Cutadapt 5.2 on the same extracted files. These files
+  are parity rerun outputs, not the original pipeline intermediates.
+  Writes per-sample ordered content, identity, checksum, and execution evidence.
+requirements:
+  commands: [python3, trim_galore_perl, cutadapt, perl]
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --id
+        type: string
+        required: true
+        description: Sample ID associated with the complete regional pair files.
+      - name: --extracted_read1
+        type: file
+        required: true
+        description: Complete R1 from the production fditools component rerun, not a prefix or subsample.
+      - name: --extracted_read2
+        type: file
+        required: true
+        description: Complete R2 from the production fditools component rerun, paired with extracted_read1.
+      - name: --rust_read1
+        type: file
+        required: true
+        description: R1 from a separate production trim_galore component rerun on these extracted files.
+      - name: --rust_read2
+        type: file
+        required: true
+        description: R2 from a separate production trim_galore component rerun on these extracted files.
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: JSON parity evidence, published only after every comparison passes.
+resources:
+  - type: bash_script
+    path: script.sh
+  - path: compare.py
+engines:
+  - type: docker
+    image: python:3.12-slim-bookworm
+    setup:
+      - type: apt
+        packages: [perl, gzip, ca-certificates, procps]
+      - type: python
+        packages: [cutadapt==5.2]
+      - type: docker
+        run: >-
+          python3 -c 'import urllib.request; urllib.request.urlretrieve("https://raw.githubusercontent.com/FelixKrueger/TrimGalore/0.6.11/trim_galore", "/usr/local/bin/trim_galore_perl")' &&
+          chmod 755 /usr/local/bin/trim_galore_perl &&
+          trim_galore_perl --version > /var/software_versions.txt &&
+          cutadapt --version >> /var/software_versions.txt &&
+          sha256sum /usr/local/bin/trim_galore_perl >> /var/software_versions.txt &&
+          python3 --version >> /var/software_versions.txt
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [singlecpu, lowmem]
