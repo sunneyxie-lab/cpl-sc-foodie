@@ -16,8 +16,8 @@ description: |
   using pinned Rust 1.97.1 and Cargo.lock in a separate Docker build stage.
   Barcodes concatenate the matched halves without a separator.
   Rebuild with `viash build src/components/fditools/config.vsh.yaml --setup cachedbuild`.
-  No release credentials or local legacy/ directory are required. The published
-  image remains private on GHCR. Linux x86-64/glibc only; ARM and musl are unsupported.
+  No release credentials or local legacy/ directory are required. CI publishing
+  requires public GHCR image visibility. Linux x86-64/glibc only; ARM and musl are unsupported.
   Rust Trim Galore is pinned to 2.3.0. The test-only compatibility baseline is
   official Perl Trim Galore 0.6.11 with Cutadapt 5.2, independently auto-selecting
   its adapter on every complete extracted regional sample.

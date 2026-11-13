@@ -1,0 +1,177 @@
+name: Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (X.Y.Z); leave empty for a development build'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  target:
+    name: Generate workflows
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.variables.outputs.version }}
+      target_branch: ${{ steps.variables.outputs.target_branch }}
+      components: ${{ steps.components.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: viash-io/viash-actions/setup@v6
+        with:
+          version: '0.9.7'
+      - name: Determine build version
+        id: variables
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -n "$RELEASE_VERSION" ]]; then
+            if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo '::error::Release version must be X.Y.Z'
+              exit 1
+            fi
+            VERSION="$RELEASE_VERSION"
+            TARGET_BRANCH="release/${VERSION%.*}.x"
+          else
+            TARGET_BRANCH="build/$GITHUB_REF_NAME"
+            VERSION="${TARGET_BRANCH//[^a-zA-Z0-9_]/_}"
+          fi
+          export VERSION
+          yq -i '.version = strenv(VERSION)' _viash.yaml
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "target_branch=$TARGET_BRANCH" >> "$GITHUB_OUTPUT"
+      - name: Generate production targets without test fixtures
+        run: |
+          viash ns build --parallel --query '^(?!test_workflows/)' \
+            --config_mod '.test_resources := []'
+      - name: List production components
+        id: components
+        run: |
+          matrix=$(viash ns list --src src/components --runner executable --engine docker --format json | \
+            jq -c '[.[] | select(.scope.image == "public") | {
+              name: ([.namespace, .name] | map(select(. != null and . != "")) | join("/")),
+              config: .build_info.config,
+              executable: (.build_info.output + "/" + .name)
+            }]')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - name: Archive generated targets
+        run: tar -czf "$RUNNER_TEMP/build.tar.gz" _viash.yaml target
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-target
+          path: ${{ runner.temp }}/build.tar.gz
+          retention-days: 1
+
+  checks:
+    name: Test ${{ matrix.component.name }}
+    needs: target
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJSON(needs.target.outputs.components) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: viash-io/viash-actions/setup@v6
+        with:
+          version: '0.9.7'
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-target
+          path: ${{ runner.temp }}
+      - run: tar -xzf "$RUNNER_TEMP/build.tar.gz"
+      - name: Build and test component with synthetic data
+        env:
+          COMPONENT_CONFIG: ${{ matrix.component.config }}
+        run: viash test "$COMPONENT_CONFIG" --runner executable --engine docker --setup cachedbuild --cpus 2
+
+  images:
+    name: Publish ${{ matrix.component.name }}
+    if: github.event_name != 'pull_request'
+    needs: [target, checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJSON(needs.target.outputs.components) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-target
+          path: ${{ runner.temp }}
+      - run: tar -xzf "$RUNNER_TEMP/build.tar.gz"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push production image
+        env:
+          EXECUTABLE: ${{ matrix.component.executable }}
+        run: |
+          "$EXECUTABLE" ---engine docker ---setup build ---verbose
+          "$EXECUTABLE" ---engine docker ---setup push ---verbose
+      - name: Require anonymous image access
+        env:
+          COMPONENT_NAME: ${{ matrix.component.name }}
+          VERSION: ${{ needs.target.outputs.version }}
+        run: |
+          image="ghcr.io/sunneyxie-lab/cpl-sc-foodie/$COMPONENT_NAME:$VERSION"
+          if ! DOCKER_CONFIG="$(mktemp -d)" docker manifest inspect "$image" > /dev/null; then
+            echo "::error::Cannot read $image anonymously. Set the GHCR package visibility to public, then rerun failed jobs."
+            exit 1
+          fi
+
+  deploy:
+    name: Publish generated branch
+    needs: [target, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-target
+          path: ${{ runner.temp }}
+      - name: Stage published project
+        run: |
+          mkdir published
+          tar -xzf "$RUNNER_TEMP/build.tar.gz" -C published
+          cp -a src assets resources_test_scripts main.nf nextflow.config README.md CHANGELOG.md published/
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: ${{ needs.target.outputs.target_branch }}
+          publish_dir: published

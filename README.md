@@ -21,6 +21,41 @@ Set `genome` to a directory containing reference FASTAs and prepared Bismark
 indexes. Use the same genome for both workflows. The settings above apply to
 both single-sample and multi-sample runs below.
 
+## CI builds and releases
+
+GitHub Actions builds the workflows and tests every local component with synthetic
+data on pull requests, pushes to `main` and manual runs. CI uses Viash 0.9.7 and
+Java 17. Real-data integration remains separate; CI downloads no OSS fixtures.
+
+After all component tests pass, pushes to `main` publish production Docker images
+tagged `build_main`, then update the private `build/main` branch with the source
+and generated `target/` tree. Test-only components and test fixtures are excluded.
+Pull requests never publish. Dependencies from biobox retain their upstream images.
+
+For a release, run **Actions → Build → Run workflow** and enter an `X.Y.Z` version,
+for example `0.1.0`. This publishes matching image tags and updates
+`release/0.1.x`. Leaving the version empty creates a development build for the
+selected branch. Development tags and release branches move on later builds;
+do not reuse a release version if its images must remain unchanged.
+
+### GHCR setup
+
+Publishing uses the workflow's `GITHUB_TOKEN`, not a developer's local token.
+For each existing package under `ghcr.io/sunneyxie-lab/cpl-sc-foodie/`, grant
+`sunneyxie-lab/cpl-sc-foodie` **Write** access under **Package settings → Manage
+Actions access**. Allow public packages in the organization's package settings.
+
+Set each production package's visibility to **Public**, including `fditools`,
+`seqkit`, `trim_galore` and `restore_consensus_tags`. New GHCR packages start
+private. On the first publishing run, new images may be pushed but fail the
+anonymous-access check. Make those packages public and rerun the failed jobs.
+The generated branch is published only after every image passes that check.
+Public package visibility cannot be changed back to private.
+
+Publishing is not atomic: an image failure can leave some tags updated while the
+generated branch stays unchanged. The workflow never changes repository or
+package visibility automatically.
+
 ## Choose an analysis folder
 
 We recommend a separate folder outside the project checkout for each analysis
@@ -163,9 +198,9 @@ completed tasks. Keep both `.nextflow/` and `work/` for resuming.
 
 Add `-c /absolute/path/to/analysis.config` for site-specific execution settings.
 For a Singularity runtime, replace `-profile docker` with `-profile singularity`.
-The runtime must have access to the required container images. The published
-fditools image is private on GHCR, so pull access requires credentials unless
-you built it locally for Docker.
+The runtime must have access to the required container images. CI requires public
+GHCR images, so successfully published builds need no image-pull credentials.
+Unpublished local images must be built locally or made available to the runtime.
 
 Show all workflow arguments without running tasks:
 

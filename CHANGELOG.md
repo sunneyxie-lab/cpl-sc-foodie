@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add GitHub Actions workflow generation and synthetic component tests for PRs, main and manual runs with Viash 0.9.7. Publish only production images, require anonymous GHCR access, then publish generated build/release branches after all checks pass. Keep real-data fixtures and test-only images out of publishing; document package visibility and Actions access setup.
 - Build FDI 0.1.0 from public MIT-licensed fditools source tag `0.1.0` with checksum-pinned Rust 1.97.1 and `cargo build --release --locked`. Rename the component to `fditools` and update workflow callers. Use a multi-stage Docker build that copies only the binary and license into the runtime image, with Python installed only for component tests. Preserve separator-free barcodes, remove private binary downloads and the custom image-build helper, and use normal Viash Docker setup without release credentials or a local `legacy/` directory.
 - Use synthetic FDI component fixtures while retaining real-data integration tests. Add native help, runtime requirements and FDI version inventory. Use direct FDI gzip I/O at all CPU budgets with synchronous output compression (`-T 1`), without reserving compression CPUs or staging plain FASTQs. Validate Trim Galore QC templates and nested output paths, and stream checker diagnostics.
 - Add `workflows/raw_fastq_align` for paired raw FOODIE FASTQs: raw QC/statistics, barcode extraction, extracted QC, Rust trimming, extracted/trimmed statistics and first-pass non-directional Bismark alignment (`maxins=2000`).

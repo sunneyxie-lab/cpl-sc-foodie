@@ -9,7 +9,7 @@ description: |
   Only the binary and license are copied from the builder into the runtime stage.
   Build with `viash build src/components/fditools/config.vsh.yaml --setup cachedbuild`.
   No release credentials or local legacy/ directory are needed for image builds.
-  Pulling the private image requires GHCR authentication.
+  CI publishing requires public GHCR image visibility.
   Supports Linux x86-64 with glibc, not ARM or musl.
   Component tests generate synthetic FASTQs and a whitelist; real regional data
   is reserved for workflow integration tests.
