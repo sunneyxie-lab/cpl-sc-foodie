@@ -1,0 +1,43 @@
+name: Release build and tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (vX.Y.Z)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-build-and-test
+  cancel-in-progress: false
+
+jobs:
+  build:
+    uses: ./.github/workflows/main-build.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      mode: release
+      version: ${{ inputs.version }}
+
+  checks:
+    needs: build
+    uses: ./.github/workflows/viash-test.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ needs.build.outputs.published_sha }}
+
+  integration:
+    needs: build
+    uses: ./.github/workflows/integration-test.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      published_ref: ${{ needs.build.outputs.published_sha }}

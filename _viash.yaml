@@ -2,6 +2,9 @@ viash_version: 0.9.7
 source: src
 target: target
 name: cpl-sc-foodie
+organization: sunneyxie-lab
+links:
+  docker_registry: ghcr.io
 version: 0.1.0
 
 repositories:
@@ -13,5 +16,3 @@ repositories:
 config_mods: |
   .resources += {path: '/src/workflows/utils/labels.config', dest: 'nextflow_labels.config'}
   .runners[.type == 'nextflow'].config.script := 'includeConfig("nextflow_labels.config")'
-  .engines[.type == 'docker'].target_registry := 'ghcr.io'
-  .engines[.type == 'docker'].target_organization := 'sunneyxie-lab'

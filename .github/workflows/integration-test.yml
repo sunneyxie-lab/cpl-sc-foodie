@@ -1,0 +1,98 @@
+name: Integration tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      published_ref:
+        description: Exact generated release commit to test without publishing
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-tests-${{ inputs.published_ref || 'integration_build' }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.published_ref == '' }}
+    uses: ./.github/workflows/main-build.yml
+    permissions:
+      contents: write
+      packages: write
+    with:
+      mode: integration
+
+  tests:
+    name: Test ${{ matrix.workflow }}
+    needs: build
+    if: ${{ !cancelled() && ((inputs.published_ref != '' && needs.build.result == 'skipped') || (inputs.published_ref == '' && needs.build.result == 'success')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        workflow: [raw_fastq_align, consensus_dedup]
+    steps:
+      - name: Reject partial standalone retries before setup
+        if: ${{ inputs.published_ref == '' }}
+        env:
+          BUILD_ATTEMPT: ${{ needs.build.outputs.build_attempt }}
+          CURRENT_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          if [[ "$BUILD_ATTEMPT" != "$CURRENT_ATTEMPT" ]]; then
+            echo '::error::Standalone integration requires a fresh publication. Use Re-run all jobs.'
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.published_ref || needs.build.outputs.published_sha }}
+          persist-credentials: false
+      - name: Require generated production tree
+        run: |
+          test -f _viash.yaml
+          test -d target/executable
+          test -d target/nextflow
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: viash-io/viash-actions/setup@v6
+        with:
+          version: '0.9.7'
+      - uses: nf-core/setup-nextflow@v3
+        with:
+          version: '25.10.6'
+          java-version: '17'
+          install-java: 'false'
+      - name: Install fixture download tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 rclone
+      - name: Download and validate real fixtures anonymously
+        env:
+          WORKFLOW: ${{ matrix.workflow }}
+          FIXTURES: ${{ runner.temp }}/resources_test
+        run: |
+          bash resources_test_scripts/local/download.sh common --resources-dir "$FIXTURES"
+          bash resources_test_scripts/local/download.sh "$WORKFLOW" --resources-dir "$FIXTURES"
+      - name: Build only local checker targets and images
+        env:
+          WORKFLOW: ${{ matrix.workflow }}
+        run: |
+          if [[ "$WORKFLOW" == raw_fastq_align ]]; then
+            query='^test_workflows/(raw_fastq_align_test|trim_galore_parity_test|consensus_dedup_test)$'
+          else
+            query='^test_workflows/consensus_dedup_test$'
+          fi
+          viash ns build --query "$query" --setup build
+      - name: Run complete scientific integration
+        timeout-minutes: 120
+        env:
+          WORKFLOW: ${{ matrix.workflow }}
+          FIXTURES: ${{ runner.temp }}/resources_test
+        run: bash "src/workflows/$WORKFLOW/integration_test.sh" --resources_test "$FIXTURES"

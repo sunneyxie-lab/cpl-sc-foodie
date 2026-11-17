@@ -1,0 +1,77 @@
+name: Component tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact commit to test
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: component-tests-${{ github.workflow }}-${{ github.ref }}-${{ inputs.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  list:
+    name: List production components
+    runs-on: ubuntu-latest
+    outputs:
+      components: ${{ steps.components.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: viash-io/viash-actions/setup@v6
+        with:
+          version: '0.9.7'
+      - name: Discover all production components
+        id: components
+        run: |
+          matrix=$(viash ns list --src src/components --runner executable --engine docker --format json | \
+            jq -c '[.[] | select(.scope.image == "public") | {
+              name: ([.namespace, .name] | map(select(. != null and . != "")) | join("/")),
+              config: .build_info.config
+            }]')
+          if [[ "$(jq 'length' <<< "$matrix")" -eq 0 ]]; then
+            echo '::error::No production components discovered'
+            exit 1
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  checks:
+    name: Test ${{ matrix.component.name }}
+    needs: list
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJSON(needs.list.outputs.components) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: viash-io/viash-actions/setup@v6
+        with:
+          version: '0.9.7'
+      - name: Build and test component with synthetic data
+        env:
+          COMPONENT_CONFIG: ${{ matrix.component.config }}
+        run: viash test "$COMPONENT_CONFIG" --runner executable --engine docker --setup cachedbuild --cpus 2
