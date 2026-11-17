@@ -235,24 +235,72 @@ After success, remove the metadata backup. Convert the cluster copy and upload
 that set to other workstations. Do not regenerate FASTQs or identity TSVs, change
 `common`/`consensus_dedup`, or download an old-layout set with the updated validator.
 
+### Public Aliyun OSS transfers
+
 Transfer commands require exactly one of `common`, `consensus_dedup` or
 `raw_fastq_align`. `all`, multiple sets and obsolete options are rejected. The set
 and `--resources-dir` may appear in either order. Install Python 3 and rclone.
-Each invocation automatically sources its required readable credential file,
-even when OSS variables already exist:
 
-| Operation | Credential file |
-| --- | --- |
-| Upload on login | `~/.config/oss/xielab-readwrite.env` |
-| Local download | `~/.config/oss/xielab-readonly.env` |
+The target is fixed: bucket `xielab-foodie` at
+`https://oss-cn-beijing.aliyuncs.com`. Downloads are anonymous and read no credential
+file; ambient OSS/AWS credentials and inherited rclone S3/OSS settings cannot
+authenticate them. TLS verification stays enabled. Requests use Alibaba
+virtual-hosted addressing and bypass proxies for both the endpoint and bucket
+hostname, preserving existing proxy exclusions. Rclone configuration stays in the
+environment with `RCLONE_CONFIG=/dev/null` and bounded connection timeouts/retries.
+Endpoint, bucket and private-CA overrides are no longer supported.
 
-Each file must define `OSS_ENDPOINT`, `OSS_BUCKET`, `OSS_ACCESS_KEY_ID` and
-`OSS_ACCESS_KEY_SECRET`. Optional `OSS_CA_CERT` must name a readable private CA.
-Keep credentials outside the repository. TLS verification stays enabled, requests
-use path-style S3 and bypass endpoint proxies, and rclone configuration stays in
-the environment with bounded connection timeouts/retries.
+Only uploads require the readable file `~/.config/oss/xielab-readwrite.env`.
+Keep it outside the repository with these two assignments:
 
-Upload each named set separately from login, common first:
+```bash
+OSS_ACCESS_KEY_ID='<access-key-id>'
+OSS_ACCESS_KEY_SECRET='<access-key-secret>'
+```
+
+Set owner-only permissions with `chmod 600 ~/.config/oss/xielab-readwrite.env`.
+Ambient keys cannot replace the file or either missing key. Never print real keys.
+Uploads set no object ACL, allowing new objects to inherit the bucket's public-read
+ACL rather than overriding it.
+
+#### User-owned policy and migration
+
+**The user applies the bucket policy and uploads all three existing validated sets.**
+Public-read allows object downloads, not anonymous listing needed by `rclone sync`.
+Add this listing-only statement to the existing bucket policy without erasing
+unrelated authenticated grants:
+
+```json
+{
+  "Version": "1",
+  "Statement": [{
+    "Effect": "Allow", "Principal": ["*"],
+    "Action": ["oss:ListObjects"],
+    "Resource": ["acs:oss:*:*:xielab-foodie"],
+    "Condition": {"StringLike": {"oss:Prefix": ["cpl-sc-foodie/resources_test/*"]}}
+  }]
+}
+```
+
+See Alibaba's [bucket-policy guide](https://www.alibabacloud.com/help/en/oss/user-guide/oss-bucket-policy/)
+and [authorization syntax](https://www.alibabacloud.com/help/en/oss/user-guide/authorization-syntax-and-elements).
+Listing is bucket-level: the ARN has no object suffix; `oss:Prefix` limits the
+requested prefix. This grants neither unrestricted listing nor anonymous
+write/delete. Do not add a wildcard Deny that could break authenticated transfers.
+Other grants must not independently expose broader anonymous listing or writes;
+this statement does not revoke existing grants. Public fixture bytes and metadata
+are readable, and names/listing metadata under the prefix are discoverable.
+Upload only fixtures suitable for public release.
+
+Validate the existing cluster fixtures, then upload each set separately from login,
+common first. Migration requires no regeneration, private-storage copy or old-storage
+deletion:
+
+```bash
+python3 resources_test_scripts/share/fixture_integrity.py validate common --resources-dir /shared/fixtures
+python3 resources_test_scripts/share/fixture_integrity.py validate consensus_dedup --resources-dir /shared/fixtures
+python3 resources_test_scripts/share/fixture_integrity.py validate raw_fastq_align --resources-dir /shared/fixtures
+```
 
 ```bash
 bash resources_test_scripts/cluster/upload.sh common --resources-dir /shared/fixtures
@@ -269,13 +317,39 @@ bash resources_test_scripts/local/download.sh raw_fastq_align --resources-dir /l
 ```
 
 Only `<root>/<set>/` and
-`oss:$OSS_BUCKET/cpl-sc-foodie/resources_test/<set>/` are synchronized. Upload
+`oss:xielab-foodie/cpl-sc-foodie/resources_test/<set>/` are synchronized. Upload
 validates before `rclone sync --progress` and replaces the selected remote prefix,
 including deleting remote-only files. Download requires valid common for workflow
 sets, syncs only the selected directory (deleting local-only files), then fully
 validates it. Neither operation touches sibling sets or automatically transfers common.
 Transfers update destinations in place, without transactional replacement or rollback.
 A copied/old marker alone never proves successful transfer.
+
+After the user applies the policy and uploads all sets, verify anonymous listing
+without a credential file:
+
+```bash
+(
+  source resources_test_scripts/share/oss_remote.sh download
+  rclone lsf oss:xielab-foodie/cpl-sc-foodie/resources_test/
+)
+```
+
+Ordinary bucket-root and outside-prefix listing must remain denied. Check them
+read-only in the same anonymous configuration:
+
+```bash
+(
+  source resources_test_scripts/share/oss_remote.sh download
+  rclone lsf oss:xielab-foodie/
+  rclone lsf oss:xielab-foodie/outside-fixtures/
+)
+```
+
+Both latter commands must fail. Then run the three download commands above against
+the same new empty private root (replace `/local/fixtures` as needed). Successful
+sync **and** real validation of all three sets establish live download acceptance.
+These instructions do not authorize an implementation agent to change cloud state.
 
 ## Run scientific integration
 
@@ -327,20 +401,30 @@ another workflow's user data. Resume scientific Nextflow tasks with `-resume`.
   marker link, the final set may already be complete; validate it before deciding
   whether cleanup or rebuilding is needed. Never promote a failed stage by hand.
 - Interrupted sync or failed post-download validation can leave the selected
-  destination invalid. Don't use it. Rerun that named sync and validation. If common
-  bytes changed, restore compatible common or rebuild dependents explicitly.
+  destination invalid. Don't use it. Confirm any surviving rclone process stopped
+  before rerunning that named sync and validation; there is no automatic repair.
+  An interruption after sync but before validation/completion logging proves neither
+  success nor failure of the bytes: validate before use. If common bytes changed,
+  restore compatible common or rebuild dependents explicitly.
 
 ## Verification boundary
 
 Local synthetic checks cover real samtools/bqtools extraction, full-reference
 identity, schema/dependency corruption, publication races, worker isolation and
 controller rejection. Scheduler/Nextflow stand-ins cover common transition rules;
-a local rclone stand-in covers selected-set mirror/deletion semantics. Those harnesses
-don't prove Slurm placement, login-side image pulling, actual cloud payload transfer
-or scientific success on newly generated real fixtures.
+a local rclone stand-in covers selected-set mirror/deletion semantics. A loopback
+check with real rclone verifies unsigned download requests and upload-key signing.
+These checks do not prove public OSS listing policy, cloud payload transfer, Slurm
+placement, login-side image pulling or scientific success.
 
-Real acceptance still requires a supported shared cluster root, source access,
-Slurm/Singularity on login, upload credentials, fresh generation, three selected
-uploads/downloads, and both scientific integrations. Retain the fixed interval and
-scientific assertions if smaller fixtures fail; report the observed failure rather
-than weakening coverage. No speedup is claimed without measurement.
+For this transfer-only migration, live anonymous listing (including denied root
+and outside-prefix requests) and three validated public downloads remain pending
+until the user applies the policy and uploads all existing validated sets.
+Local checks do not establish public migration; no fresh fixture generation or
+scientific rerun is required for this change.
+
+General scientific acceptance still requires a supported shared cluster root,
+source access, Slurm/Singularity on login, upload credentials, fresh generation,
+three selected uploads/downloads, and both scientific integrations. Retain the fixed
+interval and scientific assertions if smaller fixtures fail; report the observed
+failure rather than weakening coverage. No speedup is claimed without measurement.

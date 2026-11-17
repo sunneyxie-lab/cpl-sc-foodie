@@ -17,8 +17,8 @@ transfer_usage() {
 }
 
 transfer_main() {
-  local operation=$1 credential_file=$2
-  shift 2
+  local operation=$1
+  shift
   local fixture_set= root_argument= root_seen=false
   while (($#)); do
     case "$1" in
@@ -68,13 +68,17 @@ PY
   directory="$resources_dir/$fixture_set"
   [[ ! -L "$directory" ]] || transfer_die "selected destination must not be a symlink: $directory"
 
-  [[ -r "$credential_file" ]] || transfer_die "cannot read required credential file: $credential_file"
-  # The operation-specific file, not ambient OSS variables, supplies credentials.
-  unset OSS_ENDPOINT OSS_BUCKET OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET OSS_CA_CERT
-  source "$credential_file"
-  set +x
-  source "$share_dir/oss_remote.sh"
-  remote="oss:$OSS_BUCKET/cpl-sc-foodie/resources_test/$fixture_set/"
+  if [[ "$operation" == upload ]]; then
+    local credential_file="$HOME/.config/oss/xielab-readwrite.env"
+    [[ -r "$credential_file" ]] || transfer_die "cannot read required credential file: $credential_file"
+    # Only the upload file, not ambient OSS variables, supplies credentials.
+    unset OSS_ACCESS_KEY_ID OSS_ACCESS_KEY_SECRET
+    set +x
+    source "$credential_file"
+    set +x
+  fi
+  source "$share_dir/oss_remote.sh" "$operation"
+  remote="oss:xielab-foodie/cpl-sc-foodie/resources_test/$fixture_set/"
 
   if [[ "$operation" == upload ]]; then
     python3 "$share_dir/fixture_integrity.py" validate "$fixture_set" --resources-dir "$resources_dir" || \
