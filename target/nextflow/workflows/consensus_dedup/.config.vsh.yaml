@@ -1,0 +1,448 @@
+name: "consensus_dedup"
+namespace: "workflows"
+version: "main_build"
+authors:
+- name: "Zhang Zhen"
+  roles:
+  - "author"
+  - "maintainer"
+  info:
+    links:
+      email: "zhangzhen@cpl.ac.cn"
+argument_groups:
+- name: "Input"
+  arguments:
+  - type: "string"
+    name: "--id"
+    description: "Sample ID. Becomes the consensus read name prefix, so it must be\
+      \ a\nvalid QNAME part: no whitespace and no leading `@`.\n"
+    info: null
+    example:
+    - "H0O260120CPL0071F1S_001"
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--input"
+    description: "The sample's first-pass `bismark --non_directional` paired-end BAM,\n\
+      every read name ending in `_CB:Z:<barcode>`.\n"
+    info: null
+    example:
+    - "H0O260120CPL0071F1S_001.bam"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--genome"
+    description: "Bismark genome directory, as written by `bismark prepare`."
+    info: null
+    example:
+    - "genome"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--cell_list"
+    description: "Cells to keep, as `barcode<TAB>count` without header (e.g. an old\n\
+      `.QC.cell.lst`). When given, cell calling is skipped and this list is\nused\
+      \ and published as `--output_cell_list`.\n"
+    info: null
+    example:
+    - "H0O260120CPL0071F1S_001.cell_list.tsv"
+    must_exist: true
+    create_parent: true
+    required: false
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+- name: "Arguments"
+  arguments:
+  - type: "integer"
+    name: "--min_reads"
+    description: "Minimum number of reads in a family to call a consensus (`fgumi\
+      \ simplex --min-reads`)."
+    info: null
+    default:
+    - 1
+    required: false
+    min: 1
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "integer"
+    name: "--maxins"
+    description: "Maximum insert size for valid paired-end alignments (`bismark -X`)."
+    info: null
+    default:
+    - 2000
+    required: false
+    min: 1
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "integer"
+    name: "--drop_lowest"
+    description: "Number of lowest-count barcodes dropped before looking for the knee."
+    info: null
+    default:
+    - 1000
+    required: false
+    min: 0
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "integer"
+    name: "--max_cells"
+    description: "A knee that keeps this many cells or more counts as failed, and\
+      \ the\ntop `--fallback_cells` barcodes are kept instead.\n"
+    info: null
+    default:
+    - 2000
+    required: false
+    min: 1
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "integer"
+    name: "--fallback_cells"
+    description: "Number of top barcodes kept when the knee fails (all barcodes if\
+      \ fewer)."
+    info: null
+    default:
+    - 1000
+    required: false
+    min: 1
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+- name: "Output"
+  arguments:
+  - type: "file"
+    name: "--output_bam"
+    description: "Coordinate-sorted BAM of re-aligned consensus reads. Read names\
+      \ are\n`<id>:<MI>_CB:Z:<barcode>`, and every record carries `CB:Z:<barcode>`\n\
+      and its consensus family size as `cD:i:<n>` (from `fgumi simplex`, per mate).\n"
+    info: null
+    default:
+    - "$id.consensus_dedup.bam"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_bai"
+    description: "BAI index of `--output_bam`."
+    info: null
+    default:
+    - "$id.consensus_dedup.bam.bai"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_bismark_report"
+    description: "Bismark paired-end alignment report."
+    info: null
+    default:
+    - "$id.bismark_PE_report.txt"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_family_size_histogram"
+    description: "`fgumi group` family size histogram."
+    info: null
+    default:
+    - "$id.family_sizes.txt"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_grouping_metrics"
+    description: "`fgumi group` grouping metrics."
+    info: null
+    default:
+    - "$id.grouping_metrics.txt"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_cell_list"
+    description: "Cells kept, as `barcode<TAB>count` without header: the called cells\
+      \ with\ntheir distinct `MI` group ids, or a copy of `--cell_list` when given.\n"
+    info: null
+    default:
+    - "$id.cell_list.tsv"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_cell_counts"
+    description: "Every barcode in the `fgumi group` output with its number of distinct\n\
+      `MI` group ids, as `barcode<TAB>count`, no header. Not written when\n`--cell_list`\
+      \ is given.\n"
+    info: null
+    default:
+    - "$id.cell_counts.tsv"
+    must_exist: true
+    create_parent: true
+    required: false
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_cell_qc"
+    description: "One-line cell-calling QC summary, with header. Not written when\
+      \ `--cell_list` is given."
+    info: null
+    default:
+    - "$id.cell_qc.tsv"
+    must_exist: true
+    create_parent: true
+    required: false
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_knee_plot"
+    description: "4-panel knee plot of the cell calling. Not written when `--cell_list`\
+      \ is given."
+    info: null
+    default:
+    - "$id.knee_plot.png"
+    must_exist: true
+    create_parent: true
+    required: false
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_simplex_stats"
+    description: "`fgumi simplex` consensus calling statistics."
+    info: null
+    default:
+    - "$id.simplex_stats.txt"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+resources:
+- type: "nextflow_script"
+  path: "main.nf"
+  is_executable: true
+  entrypoint: "run_wf"
+- type: "file"
+  path: "nextflow_labels.config"
+  dest: "nextflow_labels.config"
+description: "Per-cell PCR deduplication of single-cell bisulfite data. For each sample\n\
+  (one well, cells tagged with `CB:Z:`), collapse duplicate read pairs of the\nsame\
+  \ cell into fgumi single-strand consensus reads, re-align them with Bismark\n(directional),\
+  \ and put the cell barcode back on the read name and as a `CB`\ntag, and the consensus\
+  \ family size as a `cD` tag. After grouping, cells are\ncalled from the number of\
+  \ distinct group ids per barcode (kneedle knee, with\na fallback to the top barcodes),\
+  \ and only\ncalled cells go on to consensus calling. A cell list made elsewhere\
+  \ can be\npassed instead, which skips cell calling. Outputs a coordinate-sorted,\
+  \ indexed\nBAM plus the fgumi and Bismark reports, the cell list, and, when cells\
+  \ were\ncalled, per-barcode counts, a cell-calling QC summary and a knee plot.\n\
+  \nTest fixtures keep the full chr14 genome and unchanged cell lists in\nresources_test/common,\
+  \ independently of the consensus BAMs. Generate common\nfirst on cluster login with\
+  \ `bash resources_test_scripts/cluster/common.sh\n--resources-dir <root>`, then\
+  \ submit\n`sbatch resources_test_scripts/cluster/generate/consensus_dedup.sh --resources-dir\
+  \ <root>`.\nBoth generators refuse any existing final directory, stage privately\
+  \ on shared\nstorage and publish completion last using exclusive creation and hard\
+  \ links.\nIncomplete final directories fail validation and require explicit cleanup.\n\
+  BAM selection uses inclusive\nchr14 alignment and mate starts from 23661200 through\
+  \ 24661200, without cropping\nthe reference or cell lists. Listed-barcode overlap\
+  \ must be positive.\nLocally, download common first with `bash resources_test_scripts/local/download.sh\n\
+  common --resources-dir <root>`, then download consensus_dedup with the same command.\n\
+  Run `src/workflows/consensus_dedup/integration_test.sh --resources_test <root>`.\n\
+  Python 3 is required on the Nextflow test controller. Before submitting tasks,\n\
+  the test validates schema-3 completion, payload checksums and common dependencies.\n\
+  The integration retains both supplied-list samples and an extra cell-calling run.\n\
+  See resources_test_scripts/README.md for generation, selected-set OSS transfers\n\
+  and failure recovery. Shell tools default to the checkout's resources_test root.\n"
+info: null
+status: "enabled"
+scope:
+  image: "public"
+  target: "public"
+dependencies:
+- name: "tag_cell_barcode"
+  repository:
+    type: "local"
+- name: "samtools/samtools_sort"
+  repository:
+    type: "local"
+- name: "samtools/samtools_fixmate"
+  repository:
+    type: "local"
+- name: "fgumi/fgumi_sort"
+  repository:
+    type: "local"
+- name: "fgumi/fgumi_group"
+  repository:
+    type: "local"
+- name: "call_cells"
+  repository:
+    type: "local"
+- name: "filter_cells"
+  repository:
+    type: "local"
+- name: "fgumi/fgumi_simplex"
+  repository:
+    type: "local"
+- name: "bismark/bismark_align"
+  repository:
+    type: "local"
+- name: "restore_consensus_tags"
+  repository:
+    type: "local"
+- name: "samtools/samtools_fastq"
+  repository:
+    type: "vsh"
+    repo: "biobox"
+    tag: "v0.5.0"
+- name: "samtools/samtools_index"
+  repository:
+    type: "vsh"
+    repo: "biobox"
+    tag: "v0.5.0"
+repositories:
+- type: "vsh"
+  name: "biobox"
+  repo: "biobox"
+  tag: "v0.5.0"
+license: "MIT"
+links:
+  docker_registry: "ghcr.io"
+runners:
+- type: "nextflow"
+  id: "nextflow"
+  directives:
+    tag: "$id"
+  auto:
+    simplifyInput: true
+    simplifyOutput: false
+    transcript: false
+    publish: false
+  config:
+    labels:
+      mem1gb: "memory = 1000000000.B"
+      mem2gb: "memory = 2000000000.B"
+      mem5gb: "memory = 5000000000.B"
+      mem10gb: "memory = 10000000000.B"
+      mem20gb: "memory = 20000000000.B"
+      mem50gb: "memory = 50000000000.B"
+      mem100gb: "memory = 100000000000.B"
+      mem200gb: "memory = 200000000000.B"
+      mem500gb: "memory = 500000000000.B"
+      mem1tb: "memory = 1000000000000.B"
+      mem2tb: "memory = 2000000000000.B"
+      mem5tb: "memory = 5000000000000.B"
+      mem10tb: "memory = 10000000000000.B"
+      mem20tb: "memory = 20000000000000.B"
+      mem50tb: "memory = 50000000000000.B"
+      mem100tb: "memory = 100000000000000.B"
+      mem200tb: "memory = 200000000000000.B"
+      mem500tb: "memory = 500000000000000.B"
+      mem1gib: "memory = 1073741824.B"
+      mem2gib: "memory = 2147483648.B"
+      mem4gib: "memory = 4294967296.B"
+      mem8gib: "memory = 8589934592.B"
+      mem16gib: "memory = 17179869184.B"
+      mem32gib: "memory = 34359738368.B"
+      mem64gib: "memory = 68719476736.B"
+      mem128gib: "memory = 137438953472.B"
+      mem256gib: "memory = 274877906944.B"
+      mem512gib: "memory = 549755813888.B"
+      mem1tib: "memory = 1099511627776.B"
+      mem2tib: "memory = 2199023255552.B"
+      mem4tib: "memory = 4398046511104.B"
+      mem8tib: "memory = 8796093022208.B"
+      mem16tib: "memory = 17592186044416.B"
+      mem32tib: "memory = 35184372088832.B"
+      mem64tib: "memory = 70368744177664.B"
+      mem128tib: "memory = 140737488355328.B"
+      mem256tib: "memory = 281474976710656.B"
+      mem512tib: "memory = 562949953421312.B"
+      cpu1: "cpus = 1"
+      cpu2: "cpus = 2"
+      cpu5: "cpus = 5"
+      cpu10: "cpus = 10"
+      cpu20: "cpus = 20"
+      cpu50: "cpus = 50"
+      cpu100: "cpus = 100"
+      cpu200: "cpus = 200"
+      cpu500: "cpus = 500"
+      cpu1000: "cpus = 1000"
+    script:
+    - "includeConfig(\"nextflow_labels.config\")"
+  debug: false
+  container: "docker"
+build_info:
+  config: "src/workflows/consensus_dedup/config.vsh.yaml"
+  runner: "nextflow"
+  engine: "native"
+  output: "target/nextflow/workflows/consensus_dedup"
+  executable: "target/nextflow/workflows/consensus_dedup/main.nf"
+  viash_version: "0.9.7"
+  git_commit: "d618182468a15e5116741589d447817dfb7f7627"
+  git_remote: "https://github.com/sunneyxie-lab/cpl-sc-foodie"
+  dependencies:
+  - "target/nextflow/tag_cell_barcode"
+  - "target/nextflow/samtools/samtools_sort"
+  - "target/nextflow/samtools/samtools_fixmate"
+  - "target/nextflow/fgumi/fgumi_sort"
+  - "target/nextflow/fgumi/fgumi_group"
+  - "target/nextflow/call_cells"
+  - "target/nextflow/filter_cells"
+  - "target/nextflow/fgumi/fgumi_simplex"
+  - "target/nextflow/bismark/bismark_align"
+  - "target/nextflow/restore_consensus_tags"
+  - "target/dependencies/vsh/vsh/biobox/v0.5.0/nextflow/samtools/samtools_fastq"
+  - "target/dependencies/vsh/vsh/biobox/v0.5.0/nextflow/samtools/samtools_index"
+package_config:
+  name: "cpl-sc-foodie"
+  version: "main_build"
+  info: null
+  repositories:
+  - type: "vsh"
+    name: "biobox"
+    repo: "biobox"
+    tag: "v0.5.0"
+  viash_version: "0.9.7"
+  source: "src"
+  target: "target"
+  config_mods:
+  - ".resources += {path: '/src/workflows/utils/labels.config', dest: 'nextflow_labels.config'}\n\
+    .runners[.type == 'nextflow'].config.script := 'includeConfig(\"nextflow_labels.config\"\
+    )'"
+  - ".test_resources := []"
+  organization: "sunneyxie-lab"
+  links:
+    docker_registry: "ghcr.io"

@@ -1,0 +1,92 @@
+name: fgumi_group
+namespace: fgumi
+description: |
+  Group reads that appear to come from the same original molecule with
+  `fgumi group`, tagging each template with a molecular identifier (`MI`).
+  Input must be template-coordinate sorted.
+keywords: [UMI, consensus, deduplication, bam]
+links:
+  homepage: https://github.com/fulcrumgenomics/fgumi
+  documentation: https://github.com/fulcrumgenomics/fgumi
+  repository: https://github.com/fulcrumgenomics/fgumi
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        alternatives: -i
+        type: file
+        required: true
+        must_exist: true
+        description: Template-coordinate sorted SAM/BAM file.
+        example: input.bam
+
+  - name: Output
+    arguments:
+      - name: --output
+        alternatives: -o
+        type: file
+        direction: output
+        required: true
+        description: BAM file with `MI`-tagged reads.
+        example: grouped.bam
+      - name: --family_size_histogram
+        alternatives: -f
+        type: file
+        direction: output
+        description: Tag family size counts.
+        example: family_sizes.txt
+      - name: --grouping_metrics
+        alternatives: -g
+        type: file
+        direction: output
+        description: UMI grouping metrics.
+        example: grouping_metrics.txt
+
+  - name: Arguments
+    arguments:
+      - name: --strategy
+        alternatives: -s
+        type: string
+        required: true
+        choices: [identity, edit, adjacency, paired]
+        description: The UMI assignment strategy.
+        example: identity
+      - name: --no_umi
+        type: boolean_true
+        description: |
+          Skip UMI-based grouping; group by template coordinate and strand of
+          origin. Forces the identity strategy.
+      - name: --min_map_q
+        alternatives: -m
+        type: integer
+        min: 0
+        description: Minimum mapping quality for mapped reads. The tool default is 1.
+        example: 1
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/fgumi:0.7.0--h54198d6_0
+    setup:
+      - type: docker
+        run: |
+          fgumi --version 2>&1 | head -1 | sed 's/fgumi /fgumi: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, midmem]

@@ -1,0 +1,99 @@
+name: consensus_dedup_test
+namespace: test_workflows
+scope: test
+description: |
+  Inspects one sample's `consensus_dedup` outputs and asserts the pipeline's
+  contract: a valid, coordinate-sorted, indexed BAM whose read names are
+  `<id>:<MI>_CB:Z:<barcode>` with a matching `CB` tag and a `cD:i:<n>` tag
+  (n >= 1), barcodes that all occur
+  as read name suffixes in the sample's input BAM and are all in the cell list,
+  and non-empty reports. With a passed-in cell list, the published cell list
+  equals it and no cell-calling QC is published; without one, the cell-calling
+  outputs are all present and non-empty.
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --id
+        type: string
+        required: true
+        description: Sample ID passed to the pipeline.
+        example: H0O260120CPL0071F1S_001
+      - name: --output_bam
+        type: file
+        required: true
+        description: The pipeline's `--output_bam`.
+        example: sample.consensus_dedup.bam
+      - name: --output_bai
+        type: file
+        required: true
+        description: The pipeline's `--output_bai`.
+        example: sample.consensus_dedup.bam.bai
+      - name: --bismark_report
+        type: file
+        required: true
+        description: The pipeline's `--output_bismark_report`.
+        example: sample.bismark_PE_report.txt
+      - name: --family_size_histogram
+        type: file
+        required: true
+        description: The pipeline's `--output_family_size_histogram`.
+        example: sample.family_sizes.txt
+      - name: --grouping_metrics
+        type: file
+        required: true
+        description: The pipeline's `--output_grouping_metrics`.
+        example: sample.grouping_metrics.txt
+      - name: --simplex_stats
+        type: file
+        required: true
+        description: The pipeline's `--output_simplex_stats`.
+        example: sample.simplex_stats.txt
+      - name: --cell_list
+        type: file
+        required: true
+        description: The pipeline's `--output_cell_list`.
+        example: sample.cell_list.tsv
+      - name: --cell_counts
+        type: file
+        required: false
+        description: The pipeline's `--output_cell_counts`.
+        example: sample.cell_counts.tsv
+      - name: --cell_qc
+        type: file
+        required: false
+        description: The pipeline's `--output_cell_qc`.
+        example: sample.cell_qc.tsv
+      - name: --knee_plot
+        type: file
+        required: false
+        description: The pipeline's `--output_knee_plot`.
+        example: sample.knee_plot.png
+      - name: --input_bam
+        type: file
+        required: true
+        description: The BAM the pipeline was run on for this sample.
+        example: sample.bam
+      - name: --input_cell_list
+        type: file
+        required: false
+        description: The `--cell_list` passed to the pipeline, if any.
+        example: sample.cell_list.tsv
+
+resources:
+  - type: bash_script
+    path: script.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [singlecpu, lowmem]

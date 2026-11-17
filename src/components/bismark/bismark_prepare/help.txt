@@ -1,0 +1,38 @@
+Prepare bisulfite-converted genome references (CT + GA) and index them.
+
+Usage: bismark prepare [OPTIONS] [GENOME_FOLDER]
+
+Arguments:
+  [GENOME_FOLDER]  Path to the folder containing the genome FASTA file(s). Mandatory (optional at the clap layer so `--version`/`--man` work without it)
+
+Options:
+      --bowtie2
+          Build Bowtie 2 indices (default)
+      --hisat2
+          Build HISAT2 indices
+      --minimap2
+          Build minimap2 indices
+      --path_to_aligner <PATH_TO_ALIGNER>
+          Folder containing the indexer binary (not the executable itself)
+      --parallel <PARALLEL>
+          Threads per indexing process (≥ 2). Two indexers run concurrently, so `--parallel 4` uses 8 cores total
+      --single_fasta
+          Write each chromosome to an individual FASTA file instead of one MFA
+      --slam
+          DEPRECATED (slated for removal): SLAM-seq mode — T→C / A→G instead of C→T / G→A
+      --large-index
+          Force a large index (Bowtie 2 / HISAT2)
+      --genomic_composition
+          Calculate the genomic mono-/di-nucleotide composition and write `<genome>/genomic_nucleotide_frequencies.txt` (before conversion)
+      --combined_genome
+          Bismark-Rust extension: ALSO build a single combined CT+GA reference + index (additive; default OFF)
+      --verbose
+          Verbose diagnostics
+      --man
+          Print the full help (alias of `--help`)
+  -V, --version
+          Print version and exit
+  -h, --help
+          Print help
+
+Last modified: 2026-07-13

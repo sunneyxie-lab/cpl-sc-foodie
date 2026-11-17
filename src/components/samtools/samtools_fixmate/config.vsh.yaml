@@ -1,0 +1,105 @@
+name: samtools_fixmate
+namespace: samtools
+description: |
+  Fill in mate coordinates, ISIZE and mate-related flags from a name-grouped
+  SAM/BAM file, using `samtools fixmate`. By default it also adds the `MC` (mate
+  CIGAR) and `MQ` (mate mapping quality) tags.
+keywords: [fixmate, mate, bam, sam]
+links:
+  homepage: https://www.htslib.org/
+  documentation: https://www.htslib.org/doc/samtools-fixmate.html
+  repository: https://github.com/samtools/samtools
+references:
+  doi: [10.1093/bioinformatics/btp352, 10.1093/gigascience/giab008]
+license: MIT/Expat
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        required: true
+        must_exist: true
+        description: SAM/BAM file grouped by read name (e.g. name-sorted). Coordinate-sorted input is rejected.
+        example: input.bam
+
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: Output file, BAM unless `--output_fmt` says otherwise.
+        example: out.bam
+
+  - name: Arguments
+    arguments:
+      - name: --remove_secondary
+        alternatives: -r
+        type: boolean_true
+        description: Remove unmapped reads and secondary alignments.
+        info:
+          orig_arg: -r
+      - name: --disable_proper_pair_check
+        alternatives: -p
+        type: boolean_true
+        description: Disable the FR proper pair check.
+        info:
+          orig_arg: -p
+      - name: --add_template_cigar
+        alternatives: -c
+        type: boolean_true
+        description: Add the template CIGAR `ct` tag.
+        info:
+          orig_arg: -c
+      - name: --add_mate_score
+        alternatives: -m
+        type: boolean_true
+        description: Add the mate score `ms` tag.
+        info:
+          orig_arg: -m
+      - name: --uncompressed
+        alternatives: -u
+        type: boolean_true
+        description: Uncompressed output.
+        info:
+          orig_arg: -u
+      - name: --sanitize
+        alternatives: -z
+        type: string
+        description: Sanitize alignment fields, as a comma-separated list of FLAG types (defaults to all types).
+        example: mapq,pos
+      - name: --no_PG
+        type: boolean_true
+        description: Do not add a `@PG` line.
+      - name: --output_fmt
+        alternatives: -O
+        type: string
+        description: Output format (SAM, BAM, CRAM), optionally with format options.
+        example: BAM
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1
+    setup:
+      - type: docker
+        run: |
+          samtools --version 2>&1 | head -1 | sed 's/samtools /samtools: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, lowmem]

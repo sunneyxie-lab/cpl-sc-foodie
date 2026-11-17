@@ -1,0 +1,108 @@
+name: call_cells
+description: |
+  Count distinct `MI` group ids per `CB` cell barcode in an `fgumi group` BAM,
+  call cells with a kneedle knee on the sorted counts (falling back to the top
+  barcodes when the knee fails), and write the cell list, the per-barcode
+  counts, a one-line QC summary and a 4-panel knee plot.
+keywords: [cell calling, knee, single cell, bam]
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        required: true
+        must_exist: true
+        description: "`fgumi group` BAM; every record has a `CB` tag, grouped records an `MI` tag."
+        example: grouped.bam
+      - name: --id
+        type: string
+        required: true
+        description: Sample ID, shown in the QC summary and the plot title.
+        example: H0O260120CPL0071F1S_001
+
+  - name: Output
+    arguments:
+      - name: --output_cell_list
+        type: file
+        direction: output
+        required: true
+        description: Called cells as `barcode<TAB>count`, no header, ascending by count then barcode.
+        example: cell_list.tsv
+      - name: --output_cell_counts
+        type: file
+        direction: output
+        required: true
+        description: |
+          Every barcode with its number of distinct `MI` group ids, as
+          `barcode<TAB>count`, no header, ascending by count then barcode.
+        example: cell_counts.tsv
+      - name: --output_cell_qc
+        type: file
+        direction: output
+        required: true
+        description: Cell-calling QC summary, a header row plus one data row.
+        example: cell_qc.tsv
+      - name: --output_knee_plot
+        type: file
+        direction: output
+        required: true
+        description: 4-panel knee plot.
+        example: knee_plot.png
+
+  - name: Arguments
+    arguments:
+      - name: --drop_lowest
+        type: integer
+        default: 1000
+        min: 0
+        description: Number of lowest-count barcodes dropped before looking for the knee.
+      - name: --max_cells
+        type: integer
+        default: 2000
+        min: 1
+        description: |
+          A knee that keeps this many cells or more counts as failed, and the
+          top `--fallback_cells` barcodes are kept instead.
+      - name: --fallback_cells
+        type: integer
+        default: 1000
+        min: 1
+        description: Number of top barcodes kept when the knee fails (all barcodes if fewer).
+
+resources:
+  - type: python_script
+    path: script.py
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: python:3.12-slim
+    setup:
+      - type: apt
+        packages: [procps]
+      - type: python
+        packages:
+          - pysam==0.22.1
+          - numpy==2.1.3
+          - pandas==2.2.3
+          - matplotlib==3.9.2
+          - seaborn==0.13.2
+          - kneed==0.8.5
+      - type: docker
+        run: |
+          python -c "import importlib.metadata as m; print('\n'.join(f'{p}: {m.version(p)}' for p in ['pysam', 'numpy', 'pandas', 'matplotlib', 'seaborn', 'kneed']))" > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [singlecpu, lowmem]

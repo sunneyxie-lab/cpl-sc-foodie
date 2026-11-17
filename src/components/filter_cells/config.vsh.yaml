@@ -1,0 +1,59 @@
+name: filter_cells
+description: |
+  Keep only the records whose `CB` tag is in a cell list. Record order and
+  header are kept (only a `@PG` line is added), so an `fgumi group`
+  template-coordinate BAM stays valid input for `fgumi simplex`. Fails when
+  no record is kept, e.g. for a cell list from another sample.
+keywords: [cell barcode, single cell, bam, filter]
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        required: true
+        must_exist: true
+        description: SAM/BAM whose records carry a `CB` tag.
+        example: grouped.bam
+      - name: --cell_list
+        type: file
+        required: true
+        must_exist: true
+        description: Cells to keep, as `barcode<TAB>count` without header.
+        example: cell_list.tsv
+
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: BAM with only the records of listed cells, in input order.
+        example: filtered.bam
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1
+    setup:
+      - type: docker
+        run: |
+          samtools --version 2>&1 | head -1 | sed 's/samtools /samtools: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, lowmem]

@@ -1,0 +1,60 @@
+name: restore_consensus_tags
+description: |
+  Put the cell barcode and family size back on re-aligned consensus reads.
+  Joins the aligned BAM with the fgumi consensus BAM on read name and mate
+  (0x40/0x80), renames each record to `<name>_CB:Z:<barcode>` and appends
+  `CB:Z:<barcode>` and that mate's `cD:i:<family size>`. Fails if a consensus
+  record lacks `CB` or `cD`, or an aligned record has no consensus mate.
+keywords: [cell barcode, family size, consensus, single cell, bam]
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        required: true
+        must_exist: true
+        description: Aligned BAM whose read names are consensus names without a barcode.
+        example: bismark_pe.bam
+      - name: --consensus
+        type: file
+        required: true
+        must_exist: true
+        description: Consensus BAM from `fgumi simplex`; every record carries `CB:Z:` and `cD:i:`.
+        example: consensus.bam
+
+  - name: Output
+    arguments:
+      - name: --output
+        type: file
+        direction: output
+        required: true
+        description: BAM with renamed records tagged `CB` and `cD`, in input order.
+        example: tagged.bam
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1
+    setup:
+      - type: docker
+        run: |
+          samtools --version 2>&1 | head -1 | sed 's/samtools /samtools: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [singlecpu, midmem]

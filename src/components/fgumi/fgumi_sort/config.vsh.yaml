@@ -1,0 +1,72 @@
+name: fgumi_sort
+namespace: fgumi
+description: |
+  Sort a SAM/BAM file with `fgumi sort`, by default into template-coordinate
+  order as required by `fgumi group`. Always writes BAM.
+keywords: [UMI, consensus, deduplication, bam]
+links:
+  homepage: https://github.com/fulcrumgenomics/fgumi
+  documentation: https://github.com/fulcrumgenomics/fgumi
+  repository: https://github.com/fulcrumgenomics/fgumi
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        alternatives: -i
+        type: file
+        required: true
+        must_exist: true
+        description: SAM/BAM file to sort.
+        example: input.bam
+
+  - name: Output
+    arguments:
+      - name: --output
+        alternatives: -o
+        type: file
+        direction: output
+        required: true
+        description: Sorted BAM file.
+        example: out.bam
+
+  - name: Arguments
+    arguments:
+      - name: --order
+        type: string
+        choices: [template-coordinate, coordinate, queryname, "queryname::lexicographic", "queryname::natural"]
+        description: Sort order. The tool default is `template-coordinate`.
+        example: template-coordinate
+      - name: --key_types
+        type: string
+        description: |
+          Which optional lanes (`cb`, `library`, `mi`, or `full`/`none`) to keep in
+          the template-coordinate sort key. Auto-detected when unset.
+        example: cb
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/fgumi:0.7.0--h54198d6_0
+    setup:
+      - type: docker
+        run: |
+          fgumi --version 2>&1 | head -1 | sed 's/fgumi /fgumi: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, midmem]

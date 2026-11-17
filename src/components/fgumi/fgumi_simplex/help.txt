@@ -1,0 +1,193 @@
+Calls consensus sequences from reads with the same unique molecular tag.
+
+Reads with the same unique molecular tag are examined base-by-base to assess the likelihood of each base in the
+source molecule. The likelihood model is as follows:
+
+1. First, the base qualities are adjusted. The base qualities are assumed to represent the probability of a
+   sequencing error (i.e. the sequencer observed the wrong base present on the cluster/flowcell/well). The base
+   quality scores are converted to probabilities incorporating a probability representing the chance of an error
+   from the time the unique molecular tags were integrated to just prior to sequencing. The resulting probability
+   is the error rate of all processes from right after integrating the molecular tag through to the end of
+   sequencing.
+2. Next, a consensus sequence is called for all reads with the same unique molecular tag base-by-base. For a
+   given base position in the reads, the likelihoods that an A, C, G, or T is the base for the underlying
+   source molecule respectively are computed by multiplying the likelihood of each read observing the base
+   position being considered. The probability of error (from 1.) is used when the observed base does not match
+   the hypothesized base for the underlying source molecule, while one minus that probability is used otherwise.
+   The computed likelihoods are normalized by dividing them by the sum of all four likelihoods to produce a
+   posterior probability, namely the probability that the source molecule was an A, C, G, or T from just after
+   integrating molecular tag through to sequencing, given the observations. The base with the maximum posterior
+   probability as the consensus call, and the posterior probability is used as its raw base quality.
+3. Finally, the consensus raw base quality is modified by incorporating the probability of an error prior to
+   integrating the unique molecular tags. Therefore, the probability used for the final consensus base
+   quality is the posterior probability of the source molecule having the consensus base given the observed
+   reads with the same molecular tag, all the way from sample extraction and through sample and library
+   preparation, through preparing the library for sequencing (e.g. amplification, target selection), and finally,
+   through sequencing.
+
+This tool assumes that reads with the same tag are grouped together (consecutive in the file). Bases that
+overlap within a read pair are consensus called jointly before UMI consensus calling; pass
+--consensus-call-overlapping-bases false to call each end of a pair independently, as fgbio does. Insertion or
+deletion errors in the reads are not considered in the consensus model.
+
+The consensus reads produced are unaligned, due to the difficulty and error-prone nature of inferring the consensus
+alignment. Consensus reads should therefore be aligned after, which should not be too expensive as likely there
+are far fewer consensus reads than input raw reads.
+
+Particular attention should be paid to setting the --min-reads parameter as this can have a dramatic effect on
+both results and runtime. For libraries with low duplication rates (e.g. 100-300X exomes libraries) in which it
+is desirable to retain singleton reads while making consensus reads from sets of duplicates, --min-reads=1 is
+appropriate. For libraries with high duplication rates where it is desirable to only produce consensus reads
+supported by 2+ reads to allow error correction, --min-reads=2 or higher is appropriate. After generation,
+consensus reads can be further filtered using the filter tool. As such it is always safe to run
+with --min-reads=1 and filter later, but filtering at this step can improve performance significantly.
+
+Consensus reads have a number of additional optional tags set in the resulting BAM file. The tags break down into
+those that are single-valued per read:
+
+  consensus depth      [cD] (int)  : the maximum depth of raw reads at any point in the consensus read
+  consensus min depth  [cM] (int)  : the minimum depth of raw reads at any point in the consensus read
+  consensus error rate [cE] (float): the fraction of bases in raw reads disagreeing with the final consensus calls
+
+And those that have a value per base:
+
+  consensus depth  [cd] (short[]): the count of bases contributing to the consensus read at each position
+  consensus errors [ce] (short[]): the number of bases from raw reads disagreeing with the final consensus base
+
+The per base depths and errors are both capped at 32,767. In all cases no-calls (Ns) and bases below the
+--min-input-base-quality are not counted in tag value calculations.
+
+
+Usage: fgumi simplex [OPTIONS] --input <INPUT> --output <OUTPUT> --min-reads <MIN_READS>
+
+Options:
+  -i, --input <INPUT>
+          Input BAM file
+
+  -v, --verbose
+          Enable verbose (debug-level) logging. Equivalent to setting `RUST_LOG=debug`
+
+  -o, --output <OUTPUT>
+          Output BAM file
+
+      --check-crc
+          Verify each BGZF block's CRC32 checksum while decoding the input.
+          
+          Without either `--check-crc` or `--no-check-crc`, fgumi verifies for file input and skips verification for stdin input: a freshly-piped aligner stream (e.g. `bwa-mem3 ... | fgumi ... -i /dev/stdin`) is trusted, since any corruption there is a bug in the upstream process rather than data at rest, while a file may have been archived, transferred, or copied since it was written, where a flipped bit is exactly what CRC32 exists to catch. Pass `--check-crc` to force verification on (e.g. for stdin input you don't trust). Mutually exclusive with `--no-check-crc`. Honored on every command's input decode, in both single- and multi-threaded modes: single-threaded decodes route through fgumi-bgzf, and `--threads N` runs (e.g. `clip --threads N`) decode through the unified pipeline, which takes its CRC policy from the same flag. Every run logs a `CRC verify:` line at startup stating what actually happened.
+
+      --no-check-crc
+          Skip CRC32 verification while decoding the input.
+          
+          Trades the CRC32 integrity check for faster decode. See `--check-crc` for the default policy this overrides and which commands/modes this has no effect on. Mutually exclusive with `--check-crc`.
+
+  -r, --rejects <REJECTS>
+          Optional output BAM file for rejected reads
+
+  -s, --stats <STATS>
+          Optional output file for statistics
+
+  -p, --read-name-prefix <READ_NAME_PREFIX>
+          Prefix for consensus read names
+
+  -R, --read-group-id <READ_GROUP_ID>
+          Read group ID for consensus reads
+          
+          [default: A]
+
+  -1, --error-rate-pre-umi <ERROR_RATE_PRE_UMI>
+          Phred-scaled error rate prior to UMI integration
+          
+          [default: 45]
+
+  -2, --error-rate-post-umi <ERROR_RATE_POST_UMI>
+          Phred-scaled error rate post UMI integration
+          
+          [default: 40]
+
+  -m, --min-input-base-quality <MIN_INPUT_BASE_QUALITY>
+          Minimum base quality in raw reads to use for consensus
+          
+          [default: 10]
+
+  -B, --output-per-base-tags [<true|false>]
+          Produce per-base tags (cd, ce) in addition to per-read tags. The default (true) matches fgbio, which always writes per-base tags; setting this to false drops per-base tags that fgbio emits unconditionally
+          
+          [default: true]
+
+      --trim [<true|false>]
+          Quality-trim reads before consensus calling (removes low-quality bases from ends)
+          
+          [default: false]
+
+      --min-consensus-base-quality <MIN_CONSENSUS_BASE_QUALITY>
+          Minimum consensus base quality (output consensus bases below this are masked to N). The default (2) matches fgbio, which hardcodes the consensus base-quality minimum to `MIN_PHRED` (2) and defers further masking to `fgumi filter` / fgbio `FilterConsensusReads`; exposing this as a flag is an fgumi superset
+          
+          [default: 2]
+
+      --consensus-call-overlapping-bases [<true|false>]
+          Consensus call overlapping bases in read pairs before UMI consensus calling
+          
+          [default: true]
+
+      --threads <THREADS>
+          Number of threads for the multi-threaded pipeline.
+          
+          If not specified, uses a single-threaded fast path optimized for simple streaming. When specified (even with --threads 1), uses the 7-step parallel pipeline with work-stealing scheduler.
+
+      --compression-level <COMPRESSION_LEVEL>
+          Compression level for output BAM (0-12).
+          
+          Level 0 writes uncompressed BGZF (valid BAM, no DEFLATE) — useful for piped/intermediate outputs where downstream tools will recompress. Level 1 is fastest DEFLATE with larger files. Level 12 produces smallest files but is slowest.
+          
+          [default: 1]
+
+  -M, --min-reads <MIN_READS>
+          Minimum number of reads to produce a consensus (required, no default) Matches fgbio's `CallMolecularConsensusReads` which requires this argument
+
+      --max-reads <MAX_READS>
+          Maximum reads to use per end (Fragment, R1, or R2) when building the consensus (downsample if exceeded).
+          
+          The cap is applied independently to each end rather than to the whole tag family, matching fgbio's per-end semantics (fgumi#723).
+          
+          Which reads are retained is determined by a hash of the read names, so the selection is reproducible across runs, thread counts, and execution modes. Mates share a read name and therefore a rank, so both ends of a template are normally retained or discarded together; because each end is capped independently, a template whose R1 survives upstream alignment filtering while its R2 does not can shift the cap boundary on one end alone, and then the two ends' retained subsets diverge.
+
+      --allow-unmapped [<true|false>]
+          Process unmapped reads. By default (fgbio parity, `ConsensusCallingIterator.scala:56-58`) an unmapped read is dropped before consensus calling whether or not its mate is mapped, as are all secondary/supplementary alignments. Enable for consensus on unmapped input (e.g. ribosome/protein display), mirroring `fgumi group --allow-unmapped`. Note that `codec` requires a mapped FR pair, so it emits no consensus for an unmapped pair even with this flag
+          
+          [default: false]
+
+      --max-memory <MAX_MEMORY>
+          Maximum total memory for the pipeline queues.
+          
+          Default is "768" (768 MiB) per thread. Pass "auto" to detect host memory (cgroup-aware) and subtract --memory-reserve, so the budget shrinks to fit the host and the command self-throttles instead of OOM-ing. Explicit values like "512M", "1G", "4GiB" are per-thread when --memory-per-thread is enabled (default); plain numbers are MiB. Mirrors `fgumi sort`'s --max-memory.
+          
+          This bounds the bytes held in the queues *between* pipeline stages, in total. It is not a hard RSS cap: per-thread working memory and a single oversized group sit outside it. Individual stages also back off at their own lower high-water marks (512 MiB, and 256 MiB for the processed queue); a smaller budget tightens those marks, a larger one raises the total but leaves them where they are.
+          
+          [default: 768]
+
+      --memory-reserve <MEMORY_RESERVE>
+          Memory to reserve for other processes when --max-memory=auto.
+          
+          "auto" (default) reserves min(10 GiB, 50% of host memory). Explicit values like "10G", "8GiB" set a fixed reservation. Ignored when --max-memory is an explicit value.
+          
+          [default: auto]
+
+      --memory-per-thread [<true|false>]
+          Scale the memory limit by thread count.
+          
+          When enabled (default), --max-memory is per thread, so total memory = `max_memory` × threads. Disable for a fixed total budget regardless of thread count (recommended on fixed-RAM hosts).
+          
+          [default: true]
+
+      --methylation-mode <METHYLATION_MODE>
+          Methylation-aware consensus calling mode. EM-Seq: C→T at ref-C = unmethylated (enzymatic conversion); TAPs: C→T at ref-C = methylated. Emits MM/ML methylation tags and cu/ct per-base count tags on consensus reads. Requires --ref
+
+          Possible values:
+          - em-seq: EM-Seq (enzymatic methyl-seq): unmethylated C is converted to T. C in read at ref-C = methylated (protected); T = unmethylated (converted)
+          - taps:   TAPs/Illumina 5-base: methylated C is converted to T. C in read at ref-C = unmethylated (not a target); T = methylated (converted)
+
+      --ref <REFERENCE>
+          Path to the reference FASTA file (required when --methylation-mode is set)
+
+  -h, --help
+          Print help (see a summary with '-h')
