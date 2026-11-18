@@ -1,0 +1,262 @@
+name: "bismark_align"
+namespace: "bismark"
+version: "integration_build"
+authors:
+- name: "Zhang Zhen"
+  roles:
+  - "author"
+  - "maintainer"
+  info:
+    links:
+      email: "zhangzhen@cpl.ac.cn"
+argument_groups:
+- name: "Input"
+  arguments:
+  - type: "file"
+    name: "--genome"
+    description: "Genome directory prepared by `bismark prepare`."
+    info: null
+    example:
+    - "genome"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--mates1"
+    alternatives:
+    - "-1"
+    description: "Read 1 FASTQ file, optionally gzipped."
+    info: null
+    example:
+    - "R1.fq.gz"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--mates2"
+    alternatives:
+    - "-2"
+    description: "Read 2 FASTQ file, optionally gzipped."
+    info: null
+    example:
+    - "R2.fq.gz"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+- name: "Output"
+  arguments:
+  - type: "file"
+    name: "--output"
+    description: "Unsorted BAM file of aligned read pairs."
+    info: null
+    example:
+    - "bismark_pe.bam"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--report"
+    description: "Paired-end alignment report."
+    info: null
+    example:
+    - "bismark_PE_report.txt"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+- name: "Arguments"
+  arguments:
+  - type: "integer"
+    name: "--maxins"
+    alternatives:
+    - "-X"
+    description: "Maximum insert size for valid paired-end alignments."
+    info: null
+    example:
+    - 2000
+    required: false
+    min: 1
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "integer"
+    name: "--minins"
+    alternatives:
+    - "-I"
+    description: "Minimum insert size for valid paired-end alignments."
+    info: null
+    example:
+    - 0
+    required: false
+    min: 0
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "boolean_true"
+    name: "--non_directional"
+    description: "Align to all four bisulfite strands (non-directional libraries)."
+    info: null
+    direction: "input"
+  - type: "boolean_true"
+    name: "--pbat"
+    description: "Align to the complementary strands only (PBAT libraries)."
+    info: null
+    direction: "input"
+resources:
+- type: "bash_script"
+  path: "script.sh"
+  is_executable: true
+- type: "file"
+  path: "nextflow_labels.config"
+  dest: "nextflow_labels.config"
+description: "Align paired-end bisulfite reads to a Bismark genome directory with\n\
+  `bismark align` (Bowtie 2), writing a BAM file and the paired-end alignment\nreport.\n"
+info: null
+status: "enabled"
+scope:
+  image: "public"
+  target: "public"
+repositories:
+- type: "vsh"
+  name: "biobox"
+  repo: "biobox"
+  tag: "v0.5.0"
+keywords:
+- "bisulfite"
+- "methylation"
+- "alignment"
+- "bowtie2"
+license: "GPL-3.0"
+references:
+  doi:
+  - "10.1093/bioinformatics/btr167"
+links:
+  repository: "https://github.com/FelixKrueger/Bismark"
+  docker_registry: "ghcr.io"
+  homepage: "https://github.com/FelixKrueger/Bismark"
+  documentation: "https://github.com/FelixKrueger/Bismark/tree/master/docs"
+runners:
+- type: "executable"
+  id: "executable"
+  docker_setup_strategy: "ifneedbepullelsecachedbuild"
+- type: "nextflow"
+  id: "nextflow"
+  directives:
+    label:
+    - "highcpu"
+    - "highmem"
+    tag: "$id"
+  auto:
+    simplifyInput: true
+    simplifyOutput: false
+    transcript: false
+    publish: false
+  config:
+    labels:
+      mem1gb: "memory = 1000000000.B"
+      mem2gb: "memory = 2000000000.B"
+      mem5gb: "memory = 5000000000.B"
+      mem10gb: "memory = 10000000000.B"
+      mem20gb: "memory = 20000000000.B"
+      mem50gb: "memory = 50000000000.B"
+      mem100gb: "memory = 100000000000.B"
+      mem200gb: "memory = 200000000000.B"
+      mem500gb: "memory = 500000000000.B"
+      mem1tb: "memory = 1000000000000.B"
+      mem2tb: "memory = 2000000000000.B"
+      mem5tb: "memory = 5000000000000.B"
+      mem10tb: "memory = 10000000000000.B"
+      mem20tb: "memory = 20000000000000.B"
+      mem50tb: "memory = 50000000000000.B"
+      mem100tb: "memory = 100000000000000.B"
+      mem200tb: "memory = 200000000000000.B"
+      mem500tb: "memory = 500000000000000.B"
+      mem1gib: "memory = 1073741824.B"
+      mem2gib: "memory = 2147483648.B"
+      mem4gib: "memory = 4294967296.B"
+      mem8gib: "memory = 8589934592.B"
+      mem16gib: "memory = 17179869184.B"
+      mem32gib: "memory = 34359738368.B"
+      mem64gib: "memory = 68719476736.B"
+      mem128gib: "memory = 137438953472.B"
+      mem256gib: "memory = 274877906944.B"
+      mem512gib: "memory = 549755813888.B"
+      mem1tib: "memory = 1099511627776.B"
+      mem2tib: "memory = 2199023255552.B"
+      mem4tib: "memory = 4398046511104.B"
+      mem8tib: "memory = 8796093022208.B"
+      mem16tib: "memory = 17592186044416.B"
+      mem32tib: "memory = 35184372088832.B"
+      mem64tib: "memory = 70368744177664.B"
+      mem128tib: "memory = 140737488355328.B"
+      mem256tib: "memory = 281474976710656.B"
+      mem512tib: "memory = 562949953421312.B"
+      cpu1: "cpus = 1"
+      cpu2: "cpus = 2"
+      cpu5: "cpus = 5"
+      cpu10: "cpus = 10"
+      cpu20: "cpus = 20"
+      cpu50: "cpus = 50"
+      cpu100: "cpus = 100"
+      cpu200: "cpus = 200"
+      cpu500: "cpus = 500"
+      cpu1000: "cpus = 1000"
+    script:
+    - "includeConfig(\"nextflow_labels.config\")"
+  debug: false
+  container: "docker"
+engines:
+- type: "docker"
+  id: "docker"
+  image: "quay.io/biocontainers/bismark:3.1.0--hfa8f182_0"
+  namespace_separator: "/"
+  setup:
+  - type: "docker"
+    run:
+    - "bismark --version 2>&1 | head -1 | sed 's/.*v\\([0-9.]*\\).*/bismark: \\1/'\
+      \ > /var/software_versions.txt\n"
+  entrypoint: []
+  cmd: null
+build_info:
+  config: "src/components/bismark/bismark_align/config.vsh.yaml"
+  runner: "executable"
+  engine: "docker"
+  output: "target/executable/bismark/bismark_align"
+  executable: "target/executable/bismark/bismark_align/bismark_align"
+  viash_version: "0.9.7"
+  git_commit: "4c4aa95226868907729af1d7ecb6ffbc5c649690"
+  git_remote: "https://github.com/sunneyxie-lab/cpl-sc-foodie"
+package_config:
+  name: "cpl-sc-foodie"
+  version: "integration_build"
+  info: null
+  repositories:
+  - type: "vsh"
+    name: "biobox"
+    repo: "biobox"
+    tag: "v0.5.0"
+  viash_version: "0.9.7"
+  source: "src"
+  target: "target"
+  config_mods:
+  - ".resources += {path: '/src/workflows/utils/labels.config', dest: 'nextflow_labels.config'}\n\
+    .runners[.type == 'nextflow'].config.script := 'includeConfig(\"nextflow_labels.config\"\
+    )'"
+  - ".test_resources := []"
+  organization: "sunneyxie-lab"
+  links:
+    docker_registry: "ghcr.io"

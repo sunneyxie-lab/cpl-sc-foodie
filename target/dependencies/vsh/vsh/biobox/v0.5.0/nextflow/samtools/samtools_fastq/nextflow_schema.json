@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "samtools_fastq",
+  "description": "Converts a SAM, BAM or CRAM to FASTQ format.",
+  "type": "object",
+  "$defs": {
+    "inputs": {
+      "title": "Inputs",
+      "type": "object",
+      "description": "No description",
+      "properties": {
+        "input": {
+          "type": "string",
+          "format": "path",
+          "exists": true,
+          "description": "input SAM/BAM/CRAM file",
+          "help_text": "Type: `file`, multiple: `False`, required, direction: `input`. "
+        }
+      }
+    },
+    "outputs": {
+      "title": "Outputs",
+      "type": "object",
+      "description": "No description",
+      "properties": {
+        "output": {
+          "type": "string",
+          "format": "path",
+          "description": "output FASTQ file",
+          "help_text": "Type: `file`, multiple: `False`, required, default: `\"$id.$key.output\"`, direction: `output`. ",
+          "default": "$id.$key.output"
+        }
+      }
+    },
+    "options": {
+      "title": "Options",
+      "type": "object",
+      "description": "No description",
+      "properties": {
+        "no_suffix": {
+          "type": "boolean",
+          "description": "By default, either '/1' or '/2' is added to the end of read names where the corresponding \nREAD1 or READ2 FLAG bit is set",
+          "help_text": "Type: `boolean_true`, multiple: `False`, default: `false`. ",
+          "default": false
+        },
+        "suffix": {
+          "type": "boolean",
+          "description": "Always add either '/1' or '/2' to the end of read names even when put into different files.\n",
+          "help_text": "Type: `boolean_true`, multiple: `False`, default: `false`. ",
+          "default": false
+        },
+        "use_oq": {
+          "type": "boolean",
+          "description": "Use quality values from OQ tags in preference to standard quality string if available.\n",
+          "help_text": "Type: `boolean_true`, multiple: `False`, default: `false`. ",
+          "default": false
+        },
+        "singleton": {
+          "type": "string",
+          "format": "path",
+          "description": "write singleton reads to FILE.",
+          "help_text": "Type: `file`, multiple: `False`, direction: `input`. "
+        },
+        "copy_tags": {
+          "type": "boolean",
+          "description": "Copy RG, BC and QT tags to the FASTQ header line, if they exist.\n",
+          "help_text": "Type: `boolean_true`, multiple: `False`, default: `false`. ",
+          "default": false
+        },
+        "copy_tags_list": {
+          "type": "string",
+          "description": "Specify a comma-separated list of tags to copy to the FASTQ header line, if they exist",
+          "help_text": "Type: `string`, multiple: `False`. "
+        },
+        "read1": {
+          "type": "string",
+          "format": "path",
+          "description": "Write reads with the READ1 FLAG set (and READ2 not set) to FILE instead of outputting them",
+          "help_text": "Type: `file`, multiple: `False`, default: `\"$id.$key.read1\"`, direction: `output`. ",
+          "default": "$id.$key.read1"
+        },
+        "read2": {
+          "type": "string",
+          "format": "path",
+          "description": "Write reads with the READ2 FLAG set (and READ1 not set) to FILE instead of outputting them",
+          "help_text": "Type: `file`, multiple: `False`, default: `\"$id.$key.read2\"`, direction: `output`. ",
+          "default": "$id.$key.read2"
+        },
+        "output_reads": {
+          "type": "string",
+          "format": "path",
+          "description": "Write reads with either READ1 FLAG or READ2 flag set to FILE instead of outputting them to stdout",
+          "help_text": "Type: `file`, multiple: `False`, default: `\"$id.$key.output_reads\"`, direction: `output`. ",
+          "default": "$id.$key.output_reads"
+        },
+        "output_reads_both": {
+          "type": "string",
+          "format": "path",
+          "description": "Write reads where the READ1 and READ2 FLAG bits set are either both set or both unset to FILE \ninstead of outputting them.\n",
+          "help_text": "Type: `file`, multiple: `False`, default: `\"$id.$key.output_reads_both\"`, direction: `output`. ",
+          "default": "$id.$key.output_reads_both"
+        },
+        "filter_flags": {
+          "type": "integer",
+          "description": "Only output alignments with all bits set in INT present in the FLAG field",
+          "help_text": "Type: `integer`, multiple: `False`, example: `0`. "
+        },
+        "excl_flags": {
+          "type": "string",
+          "description": "Do not output alignments with any bits set in INT present in the FLAG field",
+          "help_text": "Type: `string`, multiple: `False`, example: `\"0x900\"`. "
+        },
+        "incl_flags": {
+          "type": "string",
+          "description": "Only output alignments with any bits set in INT present in the FLAG field",
+          "help_text": "Type: `string`, multiple: `False`, example: `\"0\"`. "
+        },
+        "excl_flags_all": {
+          "type": "integer",
+          "description": "Only EXCLUDE reads with all of the bits set in INT present in the FLAG field",
+          "help_text": "Type: `integer`, multiple: `False`, example: `0`. "
+        },
+        "aux_tag": {
+          "type": "string",
+          "description": "Only output alignments containing an auxiliary tag matching both TAG and VAL",
+          "help_text": "Type: `string`, multiple: `False`. "
+        },
+        "aux_tag_file": {
+          "type": "string",
+          "description": "Only output alignments containing an auxiliary tag matching TAG and having a value listed in FILE",
+          "help_text": "Type: `string`, multiple: `False`. "
+        },
+        "casava": {
+          "type": "boolean",
+          "description": "Add Illumina Casava 1.8 format entry to header, for example: `1:N:0:ATCACG`.\n",
+          "help_text": "Type: `boolean_true`, multiple: `False`, default: `false`. ",
+          "default": false
+        },
+        "compression": {
+          "type": "integer",
+          "description": "set compression level when writing gz or bgzf fastq files.",
+          "help_text": "Type: `integer`, multiple: `False`, example: `0`. "
+        },
+        "index1": {
+          "type": "string",
+          "format": "path",
+          "description": "write first index reads to FILE.",
+          "help_text": "Type: `file`, multiple: `False`, direction: `input`. "
+        },
+        "index2": {
+          "type": "string",
+          "format": "path",
+          "description": "write second index reads to FILE.",
+          "help_text": "Type: `file`, multiple: `False`, direction: `input`. "
+        },
+        "barcode_tag": {
+          "type": "string",
+          "description": "Auxiliary tag to find index reads in",
+          "help_text": "Type: `string`, multiple: `False`, example: `\"BC\"`. "
+        },
+        "quality_tag": {
+          "type": "string",
+          "description": "Auxiliary tag to find index quality in",
+          "help_text": "Type: `string`, multiple: `False`, example: `\"QT\"`. "
+        },
+        "index_format": {
+          "type": "string",
+          "description": "string to describe how to parse the barcode and quality tags",
+          "help_text": "Type: `string`, multiple: `False`. "
+        }
+      }
+    },
+    "nextflow input-output arguments": {
+      "title": "Nextflow input-output arguments",
+      "type": "object",
+      "description": "Input/output parameters for Nextflow itself. Please note that both publishDir and publish_dir are supported but at least one has to be configured.",
+      "properties": {
+        "publish_dir": {
+          "type": "string",
+          "description": "Path to an output directory.",
+          "help_text": "Type: `string`, multiple: `False`, required, example: `\"output/\"`. "
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/$defs/inputs"
+    },
+    {
+      "$ref": "#/$defs/outputs"
+    },
+    {
+      "$ref": "#/$defs/options"
+    },
+    {
+      "$ref": "#/$defs/nextflow input-output arguments"
+    }
+  ]
+}

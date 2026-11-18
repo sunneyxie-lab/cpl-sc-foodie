@@ -1,0 +1,258 @@
+name: "samtools_fixmate"
+namespace: "samtools"
+version: "integration_build"
+authors:
+- name: "Zhang Zhen"
+  roles:
+  - "author"
+  - "maintainer"
+  info:
+    links:
+      email: "zhangzhen@cpl.ac.cn"
+argument_groups:
+- name: "Input"
+  arguments:
+  - type: "file"
+    name: "--input"
+    description: "SAM/BAM file grouped by read name (e.g. name-sorted). Coordinate-sorted\
+      \ input is rejected."
+    info: null
+    example:
+    - "input.bam"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+- name: "Output"
+  arguments:
+  - type: "file"
+    name: "--output"
+    description: "Output file, BAM unless `--output_fmt` says otherwise."
+    info: null
+    example:
+    - "out.bam"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+- name: "Arguments"
+  arguments:
+  - type: "boolean_true"
+    name: "--remove_secondary"
+    alternatives:
+    - "-r"
+    description: "Remove unmapped reads and secondary alignments."
+    info:
+      orig_arg: "-r"
+    direction: "input"
+  - type: "boolean_true"
+    name: "--disable_proper_pair_check"
+    alternatives:
+    - "-p"
+    description: "Disable the FR proper pair check."
+    info:
+      orig_arg: "-p"
+    direction: "input"
+  - type: "boolean_true"
+    name: "--add_template_cigar"
+    alternatives:
+    - "-c"
+    description: "Add the template CIGAR `ct` tag."
+    info:
+      orig_arg: "-c"
+    direction: "input"
+  - type: "boolean_true"
+    name: "--add_mate_score"
+    alternatives:
+    - "-m"
+    description: "Add the mate score `ms` tag."
+    info:
+      orig_arg: "-m"
+    direction: "input"
+  - type: "boolean_true"
+    name: "--uncompressed"
+    alternatives:
+    - "-u"
+    description: "Uncompressed output."
+    info:
+      orig_arg: "-u"
+    direction: "input"
+  - type: "string"
+    name: "--sanitize"
+    alternatives:
+    - "-z"
+    description: "Sanitize alignment fields, as a comma-separated list of FLAG types\
+      \ (defaults to all types)."
+    info: null
+    example:
+    - "mapq,pos"
+    required: false
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "boolean_true"
+    name: "--no_PG"
+    description: "Do not add a `@PG` line."
+    info: null
+    direction: "input"
+  - type: "string"
+    name: "--output_fmt"
+    alternatives:
+    - "-O"
+    description: "Output format (SAM, BAM, CRAM), optionally with format options."
+    info: null
+    example:
+    - "BAM"
+    required: false
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+resources:
+- type: "bash_script"
+  path: "script.sh"
+  is_executable: true
+- type: "file"
+  path: "nextflow_labels.config"
+  dest: "nextflow_labels.config"
+description: "Fill in mate coordinates, ISIZE and mate-related flags from a name-grouped\n\
+  SAM/BAM file, using `samtools fixmate`. By default it also adds the `MC` (mate\n\
+  CIGAR) and `MQ` (mate mapping quality) tags.\n"
+info: null
+status: "enabled"
+scope:
+  image: "public"
+  target: "public"
+repositories:
+- type: "vsh"
+  name: "biobox"
+  repo: "biobox"
+  tag: "v0.5.0"
+keywords:
+- "fixmate"
+- "mate"
+- "bam"
+- "sam"
+license: "MIT/Expat"
+references:
+  doi:
+  - "10.1093/bioinformatics/btp352"
+  - "10.1093/gigascience/giab008"
+links:
+  repository: "https://github.com/samtools/samtools"
+  docker_registry: "ghcr.io"
+  homepage: "https://www.htslib.org/"
+  documentation: "https://www.htslib.org/doc/samtools-fixmate.html"
+runners:
+- type: "executable"
+  id: "executable"
+  docker_setup_strategy: "ifneedbepullelsecachedbuild"
+- type: "nextflow"
+  id: "nextflow"
+  directives:
+    label:
+    - "lowcpu"
+    - "lowmem"
+    tag: "$id"
+  auto:
+    simplifyInput: true
+    simplifyOutput: false
+    transcript: false
+    publish: false
+  config:
+    labels:
+      mem1gb: "memory = 1000000000.B"
+      mem2gb: "memory = 2000000000.B"
+      mem5gb: "memory = 5000000000.B"
+      mem10gb: "memory = 10000000000.B"
+      mem20gb: "memory = 20000000000.B"
+      mem50gb: "memory = 50000000000.B"
+      mem100gb: "memory = 100000000000.B"
+      mem200gb: "memory = 200000000000.B"
+      mem500gb: "memory = 500000000000.B"
+      mem1tb: "memory = 1000000000000.B"
+      mem2tb: "memory = 2000000000000.B"
+      mem5tb: "memory = 5000000000000.B"
+      mem10tb: "memory = 10000000000000.B"
+      mem20tb: "memory = 20000000000000.B"
+      mem50tb: "memory = 50000000000000.B"
+      mem100tb: "memory = 100000000000000.B"
+      mem200tb: "memory = 200000000000000.B"
+      mem500tb: "memory = 500000000000000.B"
+      mem1gib: "memory = 1073741824.B"
+      mem2gib: "memory = 2147483648.B"
+      mem4gib: "memory = 4294967296.B"
+      mem8gib: "memory = 8589934592.B"
+      mem16gib: "memory = 17179869184.B"
+      mem32gib: "memory = 34359738368.B"
+      mem64gib: "memory = 68719476736.B"
+      mem128gib: "memory = 137438953472.B"
+      mem256gib: "memory = 274877906944.B"
+      mem512gib: "memory = 549755813888.B"
+      mem1tib: "memory = 1099511627776.B"
+      mem2tib: "memory = 2199023255552.B"
+      mem4tib: "memory = 4398046511104.B"
+      mem8tib: "memory = 8796093022208.B"
+      mem16tib: "memory = 17592186044416.B"
+      mem32tib: "memory = 35184372088832.B"
+      mem64tib: "memory = 70368744177664.B"
+      mem128tib: "memory = 140737488355328.B"
+      mem256tib: "memory = 281474976710656.B"
+      mem512tib: "memory = 562949953421312.B"
+      cpu1: "cpus = 1"
+      cpu2: "cpus = 2"
+      cpu5: "cpus = 5"
+      cpu10: "cpus = 10"
+      cpu20: "cpus = 20"
+      cpu50: "cpus = 50"
+      cpu100: "cpus = 100"
+      cpu200: "cpus = 200"
+      cpu500: "cpus = 500"
+      cpu1000: "cpus = 1000"
+    script:
+    - "includeConfig(\"nextflow_labels.config\")"
+  debug: false
+  container: "docker"
+engines:
+- type: "docker"
+  id: "docker"
+  image: "quay.io/biocontainers/samtools:1.19.2--h50ea8bc_1"
+  namespace_separator: "/"
+  setup:
+  - type: "docker"
+    run:
+    - "samtools --version 2>&1 | head -1 | sed 's/samtools /samtools: /' > /var/software_versions.txt\n"
+  entrypoint: []
+  cmd: null
+build_info:
+  config: "src/components/samtools/samtools_fixmate/config.vsh.yaml"
+  runner: "executable"
+  engine: "docker"
+  output: "target/executable/samtools/samtools_fixmate"
+  executable: "target/executable/samtools/samtools_fixmate/samtools_fixmate"
+  viash_version: "0.9.7"
+  git_commit: "4c4aa95226868907729af1d7ecb6ffbc5c649690"
+  git_remote: "https://github.com/sunneyxie-lab/cpl-sc-foodie"
+package_config:
+  name: "cpl-sc-foodie"
+  version: "integration_build"
+  info: null
+  repositories:
+  - type: "vsh"
+    name: "biobox"
+    repo: "biobox"
+    tag: "v0.5.0"
+  viash_version: "0.9.7"
+  source: "src"
+  target: "target"
+  config_mods:
+  - ".resources += {path: '/src/workflows/utils/labels.config', dest: 'nextflow_labels.config'}\n\
+    .runners[.type == 'nextflow'].config.script := 'includeConfig(\"nextflow_labels.config\"\
+    )'"
+  - ".test_resources := []"
+  organization: "sunneyxie-lab"
+  links:
+    docker_registry: "ghcr.io"

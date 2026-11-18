@@ -1,0 +1,79 @@
+name: fgumi_simplex
+namespace: fgumi
+description: |
+  Call single-strand consensus reads from reads grouped by `fgumi group`, with
+  `fgumi simplex`. Consensus reads are unmapped and keep the cell barcode tag.
+keywords: [UMI, consensus, deduplication, bam]
+links:
+  homepage: https://github.com/fulcrumgenomics/fgumi
+  documentation: https://github.com/fulcrumgenomics/fgumi
+  repository: https://github.com/fulcrumgenomics/fgumi
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        alternatives: -i
+        type: file
+        required: true
+        must_exist: true
+        description: BAM file grouped by `fgumi group` (`MI`-tagged).
+        example: grouped.bam
+
+  - name: Output
+    arguments:
+      - name: --output
+        alternatives: -o
+        type: file
+        direction: output
+        required: true
+        description: Unmapped BAM file of consensus reads.
+        example: consensus.bam
+      - name: --stats
+        alternatives: -s
+        type: file
+        direction: output
+        description: Consensus calling statistics.
+        example: simplex_stats.txt
+
+  - name: Arguments
+    arguments:
+      - name: --min_reads
+        alternatives: -M
+        type: integer
+        required: true
+        min: 1
+        description: Minimum number of reads to produce a consensus.
+        example: 1
+      - name: --read_name_prefix
+        alternatives: -p
+        type: string
+        description: Prefix for consensus read names.
+        example: sample1
+
+resources:
+  - type: bash_script
+    path: script.sh
+
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+
+engines:
+  - type: docker
+    image: quay.io/biocontainers/fgumi:0.7.0--h54198d6_0
+    setup:
+      - type: docker
+        run: |
+          fgumi --version 2>&1 | head -1 | sed 's/fgumi /fgumi: /' > /var/software_versions.txt
+
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, midmem]

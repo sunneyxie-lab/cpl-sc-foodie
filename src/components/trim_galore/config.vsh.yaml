@@ -1,0 +1,78 @@
+name: trim_galore
+description: |
+  Trim extracted gzip FASTQ pairs with Rust Trim Galore 2.3.0 and bundled
+  FastQC. Fixed FOODIE settings use legacy three-adapter selection from R1,
+  quality 20, stringency 2, error rate 0.1 and no automatic poly-G trimming.
+  Output report lists contain R1 then R2; small-RNA selection retains its
+  preset-specific length cutoff and R2 adapter. Barcode-bearing headers are
+  not rewritten. Runtime image digests belong in execution evidence.
+keywords: [fastq, trimming, quality-control]
+links:
+  repository: https://github.com/FelixKrueger/TrimGalore
+license: GPL-3.0
+requirements:
+  commands: [trim_galore, python3, gzip, mktemp, mkdir, dirname, mv]
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --input
+        type: file
+        multiple: true
+        required: true
+        must_exist: true
+        description: Exactly two extracted gzip FASTQs, ordered R1 then R2.
+        example: [extracted_R1.fastq.gz, extracted_R2.fastq.gz]
+  - name: Output
+    arguments:
+      - name: --output_read1
+        type: file
+        direction: output
+        required: true
+        description: Trimmed gzip R1 FASTQ.
+        example: trimmed_R1.fastq.gz
+      - name: --output_read2
+        type: file
+        direction: output
+        required: true
+        description: Trimmed gzip R2 FASTQ.
+        example: trimmed_R2.fastq.gz
+      - name: --fastqc_html
+        type: file
+        direction: output
+        multiple: true
+        required: true
+        description: One HTML output template with exactly one `*`, indexed 0 (R1) and 1 (R2).
+        example: "trimmed_fastqc.*.html"
+      - name: --fastqc_zip
+        type: file
+        direction: output
+        multiple: true
+        required: true
+        description: One ZIP output template with exactly one `*`, indexed 0 (R1) and 1 (R2).
+        example: "trimmed_fastqc.*.zip"
+resources:
+  - type: bash_script
+    path: script.sh
+  - path: select_legacy_adapter.py
+test_resources:
+  - type: bash_script
+    path: test.sh
+  - path: /src/_utils/test_helpers.sh
+engines:
+  - type: docker
+    image: ghcr.io/felixkrueger/trimgalore:v2.3.0
+    setup:
+      - type: apt
+        packages: [python3]
+      - type: docker
+        run: >-
+          trim_galore --version > /var/software_versions.txt &&
+          python3 --version >> /var/software_versions.txt
+runners:
+  - type: executable
+  - type: nextflow
+    directives:
+      label: [lowcpu, lowmem]

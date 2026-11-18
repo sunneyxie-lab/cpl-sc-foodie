@@ -1,0 +1,386 @@
+name: "raw_fastq_align"
+namespace: "workflows"
+version: "integration_build"
+authors:
+- name: "Zhang Zhen"
+  roles:
+  - "author"
+  - "maintainer"
+  info:
+    links:
+      email: "zhangzhen@cpl.ac.cn"
+argument_groups:
+- name: "Input"
+  arguments:
+  - type: "string"
+    name: "--id"
+    description: "Sample ID with no whitespace or leading @."
+    info: null
+    example:
+    - "H0O260120CPL0071F1S_001"
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--read1"
+    description: "Original paired raw R1 gzip FASTQ."
+    info: null
+    example:
+    - "sample.R1.fastq.gz"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--read2"
+    description: "Original paired raw R2 gzip FASTQ."
+    info: null
+    example:
+    - "sample.R2.fastq.gz"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--whitelist"
+    description: "Matching barcode whitelist consumed unchanged by fdi."
+    info: null
+    example:
+    - "assets/barcodes.txt"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--genome"
+    description: "Prepared Bismark reference directory with FASTAs and indexes."
+    info: null
+    example:
+    - "resources_test/common/genome"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "input"
+    multiple: false
+    multiple_sep: ";"
+- name: "Output"
+  arguments:
+  - type: "file"
+    name: "--output_bam"
+    description: "First-pass paired BAM retaining barcode QNAME suffixes, without\
+      \ CB auxiliary tags."
+    info: null
+    default:
+    - "$id.raw_fastq_align.bam"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_bismark_report"
+    description: "First-pass paired Bismark alignment report."
+    info: null
+    default:
+    - "$id.first_pass_bismark_PE_report.txt"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_raw_stats"
+    description: "Full SeqKit statistics, raw R1 then R2."
+    info: null
+    default:
+    - "$id.raw.stats.tsv"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_extracted_trimmed_stats"
+    description: "Full statistics, extracted R1/R2 then trimmed R1/R2."
+    info: null
+    default:
+    - "$id.extracted_trimmed.stats.tsv"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: false
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_raw_fastqc_html"
+    description: "Both raw FastQC HTML reports in R1/R2 order (indices 0/1)."
+    info: null
+    default:
+    - "$id.raw_fastqc.*.html"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: true
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_raw_fastqc_zip"
+    description: "Both raw FastQC ZIP reports in R1/R2 order (indices 0/1)."
+    info: null
+    default:
+    - "$id.raw_fastqc.*.zip"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: true
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_extracted_fastqc_html"
+    description: "Both extracted FastQC HTML reports in R1/R2 order (indices 0/1)."
+    info: null
+    default:
+    - "$id.extracted_fastqc.*.html"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: true
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_extracted_fastqc_zip"
+    description: "Both extracted FastQC ZIP reports in R1/R2 order (indices 0/1)."
+    info: null
+    default:
+    - "$id.extracted_fastqc.*.zip"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: true
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_trimmed_fastqc_html"
+    description: "Both trimmed FastQC HTML reports in R1/R2 order (indices 0/1)."
+    info: null
+    default:
+    - "$id.trimmed_fastqc.*.html"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: true
+    multiple_sep: ";"
+  - type: "file"
+    name: "--output_trimmed_fastqc_zip"
+    description: "Both trimmed FastQC ZIP reports in R1/R2 order (indices 0/1)."
+    info: null
+    default:
+    - "$id.trimmed_fastqc.*.zip"
+    must_exist: true
+    create_parent: true
+    required: true
+    direction: "output"
+    multiple: true
+    multiple_sep: ";"
+resources:
+- type: "nextflow_script"
+  path: "main.nf"
+  is_executable: true
+  entrypoint: "run_wf"
+- type: "file"
+  path: "nextflow_labels.config"
+  dest: "nextflow_labels.config"
+description: "Process paired raw FOODIE FASTQs through raw FastQC/statistics, fditools\
+  \ barcode\nextraction, extracted FastQC, Rust Trim Galore and first-pass Rust Bismark.\n\
+  Supply a prepared Bismark genome directory containing reference FASTAs and indexes.\n\
+  The BAM preserves terminal _CB:Z:<barcode> QNAME suffixes and has no CB auxiliary\n\
+  tags. Pass it directly as input to workflows/consensus_dedup with the same genome.\n\
+  Fixed extraction uses match length 11, skip length 19 and the supplied whitelist.\n\
+  Trimming uses quality 20, stringency 2, error rate 0.1, legacy three-adapter\nselection\
+  \ and no automatic poly-G trimming. Alignment is non-directional, maxins 2000.\n\
+  QC lists are ordered R1 then R2; published wildcard indices are 0 and 1.\n\nfdi\
+  \ 0.1.0 is built from the public MIT-licensed fditools source tag 0.1.0\nusing pinned\
+  \ Rust 1.97.1 and Cargo.lock in a separate Docker build stage.\nBarcodes concatenate\
+  \ the matched halves without a separator.\nRebuild with `viash build src/components/fditools/config.vsh.yaml\
+  \ --setup cachedbuild`.\nNo release credentials or local legacy/ directory are required.\
+  \ CI publishing\nrequires public GHCR image visibility. Linux x86-64/glibc only;\
+  \ ARM and musl are unsupported.\nRust Trim Galore is pinned to 2.3.0. The test-only\
+  \ compatibility baseline is\nofficial Perl Trim Galore 0.6.11 with Cutadapt 5.2,\
+  \ independently auto-selecting\nits adapter on every complete extracted regional\
+  \ sample.\n\nBuild with `viash ns build --parallel --setup cachedbuild`, then for\
+  \ example:\n`nextflow run target/nextflow/workflows/raw_fastq_align/main.nf -profile\
+  \ docker\n--id sample --read1 sample.R1.fastq.gz --read2 sample.R2.fastq.gz\n--whitelist\
+  \ assets/barcodes.txt --genome resources_test/common/genome`.\nIn a composed workflow,\
+  \ pass `[id, [id: id, input: producer.output_bam,\ngenome: genome]]` directly to\
+  \ consensus_dedup.run. The producer does not\nsort, index, add CB tags, call cells\
+  \ or deduplicate. The consumer owns those steps.\n\nGenerate common first on cluster\
+  \ login with\n`bash resources_test_scripts/cluster/common.sh --resources-dir <root>`.\n\
+  Common independently owns the full chr14 genome and unchanged external cell\nlists.\
+  \ Submit original-raw generation on a cpu1/cpu2 cluster allocation with\n`sbatch\
+  \ resources_test_scripts/cluster/generate/raw_fastq_align.sh --resources-dir <root>`.\n\
+  It requires source access, Python 3, samtools >=1.12 and bqtools 0.6.1.\nPython\
+  \ independently checks every original pair through EOF and audits selected\noriginals\
+  \ before bqtools encodes the gzipped R1/R2 files directly. CBQ header\ngrep determines\
+  \ matching identities and validates their full headers, sequences\nand qualities\
+  \ against the audits. Final fixtures use those original audits,\npreserving all\
+  \ four lines verbatim and source order. Auditing and encoding each\nread the full\
+  \ original sources. LF and CRLF originals retain their line endings.\nPrivate full-source\
+  \ CBQ files remain in <root>/.raw_fastq_align_cbq\n(or RAW_FASTQ_ALIGN_CBQ_CACHE),\
+  \ with private source/count metadata and archive paths.\nThey are not regional test\
+  \ fixtures and are not transferred.\nGenerators refuse existing final directories\
+  \ and stage privately on shared storage.\nPublication uses exclusive directory creation\
+  \ and hard links, with completion last.\nIncomplete final directories fail validation\
+  \ and require explicit cleanup. Schema 3\nbinds regional files to common's payload\
+  \ hashes. No per-sample provenance files\nare distributed; original/CBQ/final gzip\
+  \ checks remain generation-time checks.\nNever reuse partial gzip files or incomplete\
+  \ staging directories.\nShell tools default to the checkout's resources_test root.\n\
+  \nLocally, download common first with `bash resources_test_scripts/local/download.sh\n\
+  common --resources-dir <root>`, then download raw_fastq_align with the same command.\n\
+  Run `src/workflows/raw_fastq_align/integration_test.sh --resources_test <root>`\n\
+  for both original-raw samples, full Perl/Rust parity and unchanged BAM handoff\n\
+  into consensus_dedup with common's cell lists. No consensus BAM fixtures are\nneeded.\
+  \ Python 3 is required on the Nextflow test controller, which validates\ncompletion,\
+  \ payload hashes and common dependencies before submitting tasks.\nResume failed\
+  \ Nextflow tasks with `-resume`. See resources_test_scripts/README.md\nfor generation,\
+  \ selected-set OSS transfers and failure recovery.\n"
+info: null
+status: "enabled"
+scope:
+  image: "public"
+  target: "public"
+dependencies:
+- name: "fditools"
+  repository:
+    type: "local"
+- name: "seqkit"
+  repository:
+    type: "local"
+- name: "trim_galore"
+  repository:
+    type: "local"
+- name: "bismark/bismark_align"
+  repository:
+    type: "local"
+- name: "fastqc"
+  repository:
+    type: "vsh"
+    repo: "biobox"
+    tag: "v0.5.0"
+repositories:
+- type: "vsh"
+  name: "biobox"
+  repo: "biobox"
+  tag: "v0.5.0"
+license: "MIT"
+links:
+  docker_registry: "ghcr.io"
+runners:
+- type: "nextflow"
+  id: "nextflow"
+  directives:
+    tag: "$id"
+  auto:
+    simplifyInput: true
+    simplifyOutput: false
+    transcript: false
+    publish: false
+  config:
+    labels:
+      mem1gb: "memory = 1000000000.B"
+      mem2gb: "memory = 2000000000.B"
+      mem5gb: "memory = 5000000000.B"
+      mem10gb: "memory = 10000000000.B"
+      mem20gb: "memory = 20000000000.B"
+      mem50gb: "memory = 50000000000.B"
+      mem100gb: "memory = 100000000000.B"
+      mem200gb: "memory = 200000000000.B"
+      mem500gb: "memory = 500000000000.B"
+      mem1tb: "memory = 1000000000000.B"
+      mem2tb: "memory = 2000000000000.B"
+      mem5tb: "memory = 5000000000000.B"
+      mem10tb: "memory = 10000000000000.B"
+      mem20tb: "memory = 20000000000000.B"
+      mem50tb: "memory = 50000000000000.B"
+      mem100tb: "memory = 100000000000000.B"
+      mem200tb: "memory = 200000000000000.B"
+      mem500tb: "memory = 500000000000000.B"
+      mem1gib: "memory = 1073741824.B"
+      mem2gib: "memory = 2147483648.B"
+      mem4gib: "memory = 4294967296.B"
+      mem8gib: "memory = 8589934592.B"
+      mem16gib: "memory = 17179869184.B"
+      mem32gib: "memory = 34359738368.B"
+      mem64gib: "memory = 68719476736.B"
+      mem128gib: "memory = 137438953472.B"
+      mem256gib: "memory = 274877906944.B"
+      mem512gib: "memory = 549755813888.B"
+      mem1tib: "memory = 1099511627776.B"
+      mem2tib: "memory = 2199023255552.B"
+      mem4tib: "memory = 4398046511104.B"
+      mem8tib: "memory = 8796093022208.B"
+      mem16tib: "memory = 17592186044416.B"
+      mem32tib: "memory = 35184372088832.B"
+      mem64tib: "memory = 70368744177664.B"
+      mem128tib: "memory = 140737488355328.B"
+      mem256tib: "memory = 281474976710656.B"
+      mem512tib: "memory = 562949953421312.B"
+      cpu1: "cpus = 1"
+      cpu2: "cpus = 2"
+      cpu5: "cpus = 5"
+      cpu10: "cpus = 10"
+      cpu20: "cpus = 20"
+      cpu50: "cpus = 50"
+      cpu100: "cpus = 100"
+      cpu200: "cpus = 200"
+      cpu500: "cpus = 500"
+      cpu1000: "cpus = 1000"
+    script:
+    - "includeConfig(\"nextflow_labels.config\")"
+  debug: false
+  container: "docker"
+build_info:
+  config: "src/workflows/raw_fastq_align/config.vsh.yaml"
+  runner: "nextflow"
+  engine: "native"
+  output: "target/nextflow/workflows/raw_fastq_align"
+  executable: "target/nextflow/workflows/raw_fastq_align/main.nf"
+  viash_version: "0.9.7"
+  git_commit: "4c4aa95226868907729af1d7ecb6ffbc5c649690"
+  git_remote: "https://github.com/sunneyxie-lab/cpl-sc-foodie"
+  dependencies:
+  - "target/nextflow/fditools"
+  - "target/nextflow/seqkit"
+  - "target/nextflow/trim_galore"
+  - "target/nextflow/bismark/bismark_align"
+  - "target/dependencies/vsh/vsh/biobox/v0.5.0/nextflow/fastqc"
+package_config:
+  name: "cpl-sc-foodie"
+  version: "integration_build"
+  info: null
+  repositories:
+  - type: "vsh"
+    name: "biobox"
+    repo: "biobox"
+    tag: "v0.5.0"
+  viash_version: "0.9.7"
+  source: "src"
+  target: "target"
+  config_mods:
+  - ".resources += {path: '/src/workflows/utils/labels.config', dest: 'nextflow_labels.config'}\n\
+    .runners[.type == 'nextflow'].config.script := 'includeConfig(\"nextflow_labels.config\"\
+    )'"
+  - ".test_resources := []"
+  organization: "sunneyxie-lab"
+  links:
+    docker_registry: "ghcr.io"

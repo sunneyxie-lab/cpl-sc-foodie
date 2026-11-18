@@ -1,0 +1,204 @@
+name: consensus_dedup
+namespace: workflows
+scope: public
+description: |
+  Per-cell PCR deduplication of single-cell bisulfite data. For each sample
+  (one well, cells tagged with `CB:Z:`), collapse duplicate read pairs of the
+  same cell into fgumi single-strand consensus reads, re-align them with Bismark
+  (directional), and put the cell barcode back on the read name and as a `CB`
+  tag, and the consensus family size as a `cD` tag. After grouping, cells are
+  called from the number of distinct group ids per barcode (kneedle knee, with
+  a fallback to the top barcodes), and only
+  called cells go on to consensus calling. A cell list made elsewhere can be
+  passed instead, which skips cell calling. Outputs a coordinate-sorted, indexed
+  BAM plus the fgumi and Bismark reports, the cell list, and, when cells were
+  called, per-barcode counts, a cell-calling QC summary and a knee plot.
+
+  Test fixtures keep the full chr14 genome and unchanged cell lists in
+  resources_test/common, independently of the consensus BAMs. Generate common
+  first on cluster login with `bash resources_test_scripts/cluster/common.sh
+  --resources-dir <root>`, then submit
+  `sbatch resources_test_scripts/cluster/generate/consensus_dedup.sh --resources-dir <root>`.
+  Both generators refuse any existing final directory, stage privately on shared
+  storage and publish completion last using exclusive creation and hard links.
+  Incomplete final directories fail validation and require explicit cleanup.
+  BAM selection uses inclusive
+  chr14 alignment and mate starts from 23661200 through 24661200, without cropping
+  the reference or cell lists. Listed-barcode overlap must be positive.
+  Locally, download common first with `bash resources_test_scripts/local/download.sh
+  common --resources-dir <root>`, then download consensus_dedup with the same command.
+  Run `src/workflows/consensus_dedup/integration_test.sh --resources_test <root>`.
+  Python 3 is required on the Nextflow test controller. Before submitting tasks,
+  the test validates schema-3 completion, payload checksums and common dependencies.
+  The integration retains both supplied-list samples and an extra cell-calling run.
+  See resources_test_scripts/README.md for generation, selected-set OSS transfers
+  and failure recovery. Shell tools default to the checkout's resources_test root.
+license: MIT
+authors:
+  - __merge__: /src/_authors/zhang_zhen.yaml
+    roles: [author, maintainer]
+
+argument_groups:
+  - name: Input
+    arguments:
+      - name: --id
+        type: string
+        required: true
+        description: |
+          Sample ID. Becomes the consensus read name prefix, so it must be a
+          valid QNAME part: no whitespace and no leading `@`.
+        example: H0O260120CPL0071F1S_001
+      - name: --input
+        type: file
+        required: true
+        description: |
+          The sample's first-pass `bismark --non_directional` paired-end BAM,
+          every read name ending in `_CB:Z:<barcode>`.
+        example: H0O260120CPL0071F1S_001.bam
+      - name: --genome
+        type: file
+        required: true
+        description: Bismark genome directory, as written by `bismark prepare`.
+        example: genome
+      - name: --cell_list
+        type: file
+        required: false
+        description: |
+          Cells to keep, as `barcode<TAB>count` without header (e.g. an old
+          `.QC.cell.lst`). When given, cell calling is skipped and this list is
+          used and published as `--output_cell_list`.
+        example: H0O260120CPL0071F1S_001.cell_list.tsv
+
+  - name: Arguments
+    arguments:
+      - name: --min_reads
+        type: integer
+        default: 1
+        min: 1
+        description: Minimum number of reads in a family to call a consensus (`fgumi simplex --min-reads`).
+      - name: --maxins
+        type: integer
+        default: 2000
+        min: 1
+        description: Maximum insert size for valid paired-end alignments (`bismark -X`).
+      - name: --drop_lowest
+        type: integer
+        default: 1000
+        min: 0
+        description: Number of lowest-count barcodes dropped before looking for the knee.
+      - name: --max_cells
+        type: integer
+        default: 2000
+        min: 1
+        description: |
+          A knee that keeps this many cells or more counts as failed, and the
+          top `--fallback_cells` barcodes are kept instead.
+      - name: --fallback_cells
+        type: integer
+        default: 1000
+        min: 1
+        description: Number of top barcodes kept when the knee fails (all barcodes if fewer).
+
+  - name: Output
+    arguments:
+      - name: --output_bam
+        type: file
+        direction: output
+        required: true
+        default: "$id.consensus_dedup.bam"
+        description: |
+          Coordinate-sorted BAM of re-aligned consensus reads. Read names are
+          `<id>:<MI>_CB:Z:<barcode>`, and every record carries `CB:Z:<barcode>`
+          and its consensus family size as `cD:i:<n>` (from `fgumi simplex`, per mate).
+      - name: --output_bai
+        type: file
+        direction: output
+        required: true
+        default: "$id.consensus_dedup.bam.bai"
+        description: BAI index of `--output_bam`.
+      - name: --output_bismark_report
+        type: file
+        direction: output
+        required: true
+        default: "$id.bismark_PE_report.txt"
+        description: Bismark paired-end alignment report.
+      - name: --output_family_size_histogram
+        type: file
+        direction: output
+        required: true
+        default: "$id.family_sizes.txt"
+        description: "`fgumi group` family size histogram."
+      - name: --output_grouping_metrics
+        type: file
+        direction: output
+        required: true
+        default: "$id.grouping_metrics.txt"
+        description: "`fgumi group` grouping metrics."
+      - name: --output_cell_list
+        type: file
+        direction: output
+        required: true
+        default: "$id.cell_list.tsv"
+        description: |
+          Cells kept, as `barcode<TAB>count` without header: the called cells with
+          their distinct `MI` group ids, or a copy of `--cell_list` when given.
+      - name: --output_cell_counts
+        type: file
+        direction: output
+        required: false
+        default: "$id.cell_counts.tsv"
+        description: |
+          Every barcode in the `fgumi group` output with its number of distinct
+          `MI` group ids, as `barcode<TAB>count`, no header. Not written when
+          `--cell_list` is given.
+      - name: --output_cell_qc
+        type: file
+        direction: output
+        required: false
+        default: "$id.cell_qc.tsv"
+        description: One-line cell-calling QC summary, with header. Not written when `--cell_list` is given.
+      - name: --output_knee_plot
+        type: file
+        direction: output
+        required: false
+        default: "$id.knee_plot.png"
+        description: 4-panel knee plot of the cell calling. Not written when `--cell_list` is given.
+      - name: --output_simplex_stats
+        type: file
+        direction: output
+        required: true
+        default: "$id.simplex_stats.txt"
+        description: "`fgumi simplex` consensus calling statistics."
+
+resources:
+  - type: nextflow_script
+    path: main.nf
+    entrypoint: run_wf
+
+test_resources:
+  - type: nextflow_script
+    path: test.nf
+    entrypoint: test_wf
+  - path: /resources_test/consensus_dedup
+  - path: /resources_test/common
+  - path: /resources_test_scripts/share
+    dest: resources_test_scripts/share
+
+dependencies:
+  - name: tag_cell_barcode
+  - name: samtools/samtools_sort
+  - name: samtools/samtools_fixmate
+  - name: fgumi/fgumi_sort
+  - name: fgumi/fgumi_group
+  - name: call_cells
+  - name: filter_cells
+  - name: fgumi/fgumi_simplex
+  - name: bismark/bismark_align
+  - name: restore_consensus_tags
+  - name: samtools/samtools_fastq
+    repository: biobox
+  - name: samtools/samtools_index
+    repository: biobox
+
+runners:
+  - type: nextflow

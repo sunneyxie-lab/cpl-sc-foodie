@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "samtools_index",
+  "description": "Index SAM/BAM/CRAM files.",
+  "type": "object",
+  "$defs": {
+    "inputs": {
+      "title": "Inputs",
+      "type": "object",
+      "description": "No description",
+      "properties": {
+        "input": {
+          "type": "string",
+          "format": "path",
+          "exists": true,
+          "description": "Input file name",
+          "help_text": "Type: `file`, multiple: `False`, required, direction: `input`. "
+        }
+      }
+    },
+    "outputs": {
+      "title": "Outputs",
+      "type": "object",
+      "description": "No description",
+      "properties": {
+        "output": {
+          "type": "string",
+          "format": "path",
+          "description": "Output file name",
+          "help_text": "Type: `file`, multiple: `False`, required, default: `\"$id.$key.output.bai\"`, direction: `output`, example: `\"out.bam.bai\"`. ",
+          "default": "$id.$key.output.bai"
+        }
+      }
+    },
+    "options": {
+      "title": "Options",
+      "type": "object",
+      "description": "No description",
+      "properties": {
+        "bai": {
+          "type": "boolean",
+          "description": "Generate BAM index",
+          "help_text": "Type: `boolean_true`, multiple: `False`, default: `false`. ",
+          "default": false
+        },
+        "csi": {
+          "type": "boolean",
+          "description": "Create a CSI index for BAM files instead of the traditional BAI \nindex",
+          "help_text": "Type: `boolean_true`, multiple: `False`, default: `false`. ",
+          "default": false
+        },
+        "min_shift": {
+          "type": "integer",
+          "description": "Create a CSI index, with a minimum interval size of 2^INT.\n",
+          "help_text": "Type: `integer`, multiple: `False`. "
+        }
+      }
+    },
+    "nextflow input-output arguments": {
+      "title": "Nextflow input-output arguments",
+      "type": "object",
+      "description": "Input/output parameters for Nextflow itself. Please note that both publishDir and publish_dir are supported but at least one has to be configured.",
+      "properties": {
+        "publish_dir": {
+          "type": "string",
+          "description": "Path to an output directory.",
+          "help_text": "Type: `string`, multiple: `False`, required, example: `\"output/\"`. "
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$ref": "#/$defs/inputs"
+    },
+    {
+      "$ref": "#/$defs/outputs"
+    },
+    {
+      "$ref": "#/$defs/options"
+    },
+    {
+      "$ref": "#/$defs/nextflow input-output arguments"
+    }
+  ]
+}
