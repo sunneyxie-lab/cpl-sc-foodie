@@ -3243,7 +3243,7 @@ meta = [
     "engine" : "docker",
     "output" : "/home/runner/work/cpl-sc-foodie/cpl-sc-foodie/target/nextflow/seqkit",
     "viash_version" : "0.9.7",
-    "git_commit" : "d618182468a15e5116741589d447817dfb7f7627",
+    "git_commit" : "5a16f29ba2febd89756b2a7fccf86c70a553e1cc",
     "git_remote" : "https://github.com/sunneyxie-lab/cpl-sc-foodie"
   },
   "package_config" : {

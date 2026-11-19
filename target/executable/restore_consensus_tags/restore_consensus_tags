@@ -452,9 +452,9 @@ RUN samtools --version 2>&1 | head -1 | sed 's/samtools /samtools: /' > /var/sof
 
 LABEL org.opencontainers.image.authors="Zhang Zhen"
 LABEL org.opencontainers.image.description="Companion container for running component restore_consensus_tags"
-LABEL org.opencontainers.image.created="2026-11-17T08:21:32Z"
+LABEL org.opencontainers.image.created="2026-11-19T06:04:39Z"
 LABEL org.opencontainers.image.source="https://github.com/sunneyxie-lab/cpl-sc-foodie"
-LABEL org.opencontainers.image.revision="d618182468a15e5116741589d447817dfb7f7627"
+LABEL org.opencontainers.image.revision="5a16f29ba2febd89756b2a7fccf86c70a553e1cc"
 LABEL org.opencontainers.image.version="main_build"
 
 VIASHDOCKER

@@ -3344,7 +3344,7 @@ meta = [
     "engine" : "docker",
     "output" : "/home/runner/work/cpl-sc-foodie/cpl-sc-foodie/target/nextflow/bismark/bismark_align",
     "viash_version" : "0.9.7",
-    "git_commit" : "d618182468a15e5116741589d447817dfb7f7627",
+    "git_commit" : "5a16f29ba2febd89756b2a7fccf86c70a553e1cc",
     "git_remote" : "https://github.com/sunneyxie-lab/cpl-sc-foodie"
   },
   "package_config" : {
@@ -3425,10 +3425,12 @@ out="\\$meta_temp_dir/bismark_out"
 tmp="\\$meta_temp_dir/bismark_tmp"
 mkdir -p "\\$out"
 
-# Each multicore chunk runs two bowtie2 instances in directional mode.
-if [[ -n "\\$meta_cpus" && "\\$meta_cpus" -ge 2 ]]; then
-  multicore=\\$(( meta_cpus / 2 ))
+# Threads share each Bowtie 2 index instead of loading it again for each input chunk.
+instances=2
+if [[ -n "\\$par_non_directional" ]]; then
+  instances=4
 fi
+threads=\\$(( \\${meta_cpus:-1} / instances ))
 
 cmd_args=(
   bismark
@@ -3442,8 +3444,10 @@ cmd_args=(
   \\${par_minins:+-I "\\$par_minins"}
   \\${par_non_directional:+--non_directional}
   \\${par_pbat:+--pbat}
-  \\${multicore:+--multicore "\\$multicore"}
 )
+if (( threads >= 2 )); then
+  cmd_args+=(-p "\\$threads")
+fi
 
 "\\${cmd_args[@]}"
 
