@@ -12,10 +12,12 @@ out="$meta_temp_dir/bismark_out"
 tmp="$meta_temp_dir/bismark_tmp"
 mkdir -p "$out"
 
-# Each multicore chunk runs two bowtie2 instances in directional mode.
-if [[ -n "$meta_cpus" && "$meta_cpus" -ge 2 ]]; then
-  multicore=$(( meta_cpus / 2 ))
+# Threads share each Bowtie 2 index instead of loading it again for each input chunk.
+instances=2
+if [[ -n "$par_non_directional" ]]; then
+  instances=4
 fi
+threads=$(( ${meta_cpus:-1} / instances ))
 
 cmd_args=(
   bismark
@@ -29,8 +31,10 @@ cmd_args=(
   ${par_minins:+-I "$par_minins"}
   ${par_non_directional:+--non_directional}
   ${par_pbat:+--pbat}
-  ${multicore:+--multicore "$multicore"}
 )
+if (( threads >= 2 )); then
+  cmd_args+=(-p "$threads")
+fi
 
 "${cmd_args[@]}"
 
